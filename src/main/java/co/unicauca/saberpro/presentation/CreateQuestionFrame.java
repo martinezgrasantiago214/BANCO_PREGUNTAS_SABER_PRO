@@ -1,6 +1,7 @@
 package co.unicauca.saberpro.presentation;
 
 import co.unicauca.saberpro.domain.DifficultyLevel;
+import co.unicauca.saberpro.domain.Question;
 import co.unicauca.saberpro.domain.QuestionRequest;
 import co.unicauca.saberpro.microkernel.plugins.MultipleChoiceQuestionPlugin;
 import co.unicauca.saberpro.service.OperationResult;
@@ -13,12 +14,19 @@ import java.util.List;
 
 /**
  * Formulario para que un autor cree una pregunta de seleccion multiple con
- * unica respuesta. Al guardar, el sistema valida automaticamente que la
+ * unica respuesta (HU01). Al guardar, el sistema valida automaticamente que la
  * informacion este completa y sea consistente (ver microkernel/pipeline).
+ *
+ * El mismo formulario se reutiliza en modo EDICION (HU03: "listar las
+ * preguntas que he creado para poder mas adelante verlas y editarlas"): se
+ * abre precargado con una pregunta existente en estado Borrador y, al
+ * guardar, los cambios pasan por el mismo pipeline de validacion.
  */
 public class CreateQuestionFrame extends JFrame {
 
     private final AppContext context;
+    /** Pregunta que se esta editando, o null si se esta creando una nueva. */
+    private final Question editing;
 
     private final JTextArea txtContext = new JTextArea(3, 30);
     private final JTextArea txtDirectQuestion = new JTextArea(2, 30);
@@ -31,10 +39,40 @@ public class CreateQuestionFrame extends JFrame {
     private final JTextField txtSubtopic = new JTextField(30);
     private final JComboBox<DifficultyLevel> cmbDifficulty = new JComboBox<>(DifficultyLevel.values());
 
+    /** Modo creacion (HU01). */
     public CreateQuestionFrame(AppContext context) {
-        super("Crear pregunta");
+        this(context, null);
+    }
+
+    /** Modo edicion (HU03) si {@code editing} no es null. */
+    public CreateQuestionFrame(AppContext context, Question editing) {
+        super(editing == null ? "Crear pregunta" : "Editar pregunta");
         this.context = context;
+        this.editing = editing;
         buildUi();
+        if (editing != null) {
+            fillForm(editing);
+        }
+    }
+
+    /** Precarga el formulario con los datos de la pregunta a editar. */
+    private void fillForm(Question q) {
+        txtContext.setText(q.getContext());
+        txtDirectQuestion.setText(q.getDirectQuestion());
+        List<String> options = q.getDistractors();
+        for (int i = 0; i < txtDistractors.length; i++) {
+            txtDistractors[i].setText(i < options.size() ? options.get(i) : "");
+        }
+        refreshCorrectAnswerOptions();
+        cmbCorrectAnswer.setSelectedItem(q.getCorrectAnswer());
+        txtJustification.setText(q.getJustification());
+        txtBibliography.setText(q.getBibliography());
+        txtCompetence.setText(q.getCompetence());
+        txtTopic.setText(q.getTopic());
+        txtSubtopic.setText(q.getSubtopic());
+        if (q.getDifficultyLevel() != null) {
+            cmbDifficulty.setSelectedItem(q.getDifficultyLevel());
+        }
     }
 
     private void buildUi() {
@@ -44,7 +82,7 @@ public class CreateQuestionFrame extends JFrame {
 
         JPanel root = new JPanel(new BorderLayout());
         UiTheme.applyBackground(root);
-        root.add(UiTheme.header("Crear pregunta"), BorderLayout.NORTH);
+        root.add(UiTheme.header(editing == null ? "Crear pregunta" : "Editar pregunta"), BorderLayout.NORTH);
 
         JPanel form = new JPanel();
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
@@ -73,7 +111,7 @@ public class CreateQuestionFrame extends JFrame {
         form.add(labeled("Subtema:", txtSubtopic));
         form.add(labeled("Nivel de dificultad:", cmbDifficulty));
 
-        JButton btnSave = UiTheme.primaryButton("Guardar pregunta");
+        JButton btnSave = UiTheme.primaryButton(editing == null ? "Guardar pregunta" : "Guardar cambios");
         btnSave.addActionListener(e -> onSave());
         JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         UiTheme.applyBackground(buttonsPanel);
@@ -107,7 +145,7 @@ public class CreateQuestionFrame extends JFrame {
         String correctAnswer = (String) cmbCorrectAnswer.getSelectedItem();
 
         QuestionRequest request = new QuestionRequest(
-                MultipleChoiceQuestionPlugin.TYPE,
+                editing == null ? MultipleChoiceQuestionPlugin.TYPE : editing.getType(),
                 txtContext.getText().trim(),
                 txtDirectQuestion.getText().trim(),
                 distractors,
@@ -121,10 +159,14 @@ public class CreateQuestionFrame extends JFrame {
                 context.getLoggedInUser().getLogin()
         );
 
-        OperationResult result = context.getQuestionService().crearPregunta(request);
+        OperationResult result = editing == null
+                ? context.getQuestionService().crearPregunta(request)
+                : context.getQuestionService().actualizarPregunta(editing.getId(), request);
         if (result.isSuccess()) {
             JOptionPane.showMessageDialog(this,
-                    "Pregunta creada correctamente en estado Borrador.",
+                    editing == null
+                            ? "Pregunta creada correctamente en estado Borrador."
+                            : "Cambios guardados correctamente.",
                     "Exito", JOptionPane.INFORMATION_MESSAGE);
             dispose();
         } else {
