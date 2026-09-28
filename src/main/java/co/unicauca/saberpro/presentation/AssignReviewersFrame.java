@@ -115,12 +115,21 @@ public class AssignReviewersFrame extends JFrame {
         }
 
         String questionId = (String) tableModel.getValueAt(row, 0);
+        context.getEmailService().consumeDeliveryReport(); // descarta reportes anteriores
         OperationResult result = context.getQuestionService().asignarRevisores(questionId, selectedLogins);
 
         if (result.isSuccess()) {
-            JOptionPane.showMessageDialog(this,
-                    "Revisor(es) asignado(s). La pregunta paso a estado 'En revision' "
-                            + "y se notifico por correo a cada revisor.",
+            StringBuilder msg = new StringBuilder(
+                    "Revisor(es) asignado(s). La pregunta paso a estado 'En revision'.\n\n"
+                            + "Notificaciones por correo:\n");
+            for (String line : context.getEmailService().consumeDeliveryReport()) {
+                msg.append(" - ").append(line).append('\n');
+            }
+            JTextArea area = new JTextArea(msg.toString(), 8, 60);
+            area.setEditable(false);
+            area.setLineWrap(true);
+            area.setWrapStyleWord(true);
+            JOptionPane.showMessageDialog(this, new JScrollPane(area),
                     "Exito", JOptionPane.INFORMATION_MESSAGE);
             loadPendingQuestions();
         } else {

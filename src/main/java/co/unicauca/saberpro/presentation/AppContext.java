@@ -14,6 +14,7 @@ public final class AppContext {
 
     private final UserService userService;
     private final QuestionService questionService;
+    private final IEmailService emailService;
     private User loggedInUser;
 
     public AppContext() {
@@ -26,7 +27,7 @@ public final class AppContext {
 
         IQuestionRepository questionRepository = QuestionRepositoryFactory.getInstance().getRepository("file");
         QuestionMicrokernel microkernel = new QuestionMicrokernel();
-        IEmailService emailService = new SmtpEmailService();
+        this.emailService = new SmtpEmailService();
 
         this.questionService = new QuestionService(questionRepository, microkernel, userService, emailService);
 
@@ -50,6 +51,11 @@ public final class AppContext {
 
     public QuestionService getQuestionService() {
         return questionService;
+    }
+
+    /** Permite a la vista de HU04 mostrar si cada correo se envio o se simulo. */
+    public IEmailService getEmailService() {
+        return emailService;
     }
 
     public User getLoggedInUser() {
