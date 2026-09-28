@@ -12,11 +12,17 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.DefaultTableModel;
 import java.awt.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Lista las preguntas creadas por el autor autenticado, con paginacion y
  * filtros (estado, tema, palabra clave), mostrando el estado de cada una
- * con su color correspondiente.
+ * con su color correspondiente (HU02) y una leyenda de colores.
+ *
+ * HU03 ("listar las preguntas que he creado para poder mas adelante verlas
+ * y editarlas"): desde aqui se puede ver el detalle completo de una pregunta
+ * y editar las que siguen en estado Borrador.
  *
  * Implementa Observer (micro patron MVC + Observer) para refrescarse
  * automaticamente si el estado de alguna pregunta cambia desde otra parte
@@ -40,7 +46,10 @@ public class MyQuestionsFrame extends JFrame implements Observer {
     private final JLabel lblPageInfo = new JLabel();
 
     private int currentPage = 1;
+    private int totalPages = 1;
     private static final int PAGE_SIZE = 5;
+    /** Preguntas de la pagina actual, en el mismo orden que las filas de la tabla. */
+    private final List<Question> currentItems = new ArrayList<>();
 
     public MyQuestionsFrame(AppContext context) {
         super("Mis preguntas");
@@ -85,11 +94,27 @@ public class MyQuestionsFrame extends JFrame implements Observer {
         JButton btnFilter = UiTheme.secondaryButton("Buscar");
         btnFilter.addActionListener(e -> { currentPage = 1; loadData(); });
         filters.add(btnFilter);
-        center.add(filters, BorderLayout.NORTH);
+
+        JPanel top = new JPanel();
+        top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
+        UiTheme.applyBackground(top);
+        top.add(filters);
+        top.add(buildColorLegend());
+        center.add(top, BorderLayout.NORTH);
 
         // --- tabla con color por estado ---
         table.getColumnModel().getColumn(4).setCellRenderer(new StateColorRenderer());
         table.setRowHeight(24);
+        table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+        // Doble clic sobre una fila = ver detalle
+        table.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override
+            public void mouseClicked(java.awt.event.MouseEvent e) {
+                if (e.getClickCount() == 2) {
+                    onViewDetail();
+                }
+            }
+        });
         center.add(new JScrollPane(table), BorderLayout.CENTER);
 
         // --- pie: paginacion + accion ---
@@ -100,16 +125,22 @@ public class MyQuestionsFrame extends JFrame implements Observer {
         JButton btnPrev = UiTheme.secondaryButton("<< Anterior");
         btnPrev.addActionListener(e -> { if (currentPage > 1) { currentPage--; loadData(); } });
         JButton btnNext = UiTheme.secondaryButton("Siguiente >>");
-        btnNext.addActionListener(e -> { currentPage++; loadData(); });
+        btnNext.addActionListener(e -> { if (currentPage < totalPages) { currentPage++; loadData(); } });
         pagination.add(btnPrev);
         pagination.add(lblPageInfo);
         pagination.add(btnNext);
         south.add(pagination, BorderLayout.NORTH);
 
+        JButton btnDetail = UiTheme.secondaryButton("Ver detalle");
+        btnDetail.addActionListener(e -> onViewDetail());
+        JButton btnEdit = UiTheme.secondaryButton("Editar");
+        btnEdit.addActionListener(e -> onEdit());
         JButton btnChangeState = UiTheme.primaryButton("Enviar a revision");
         btnChangeState.addActionListener(e -> onChangeState());
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.CENTER));
         UiTheme.applyBackground(actions);
+        actions.add(btnDetail);
+        actions.add(btnEdit);
         actions.add(btnChangeState);
         south.add(actions, BorderLayout.SOUTH);
 
@@ -157,9 +188,18 @@ public class MyQuestionsFrame extends JFrame implements Observer {
                     "Error de base de datos", JOptionPane.ERROR_MESSAGE);
         }
 
+        totalPages = result.getTotalPages();
+        if (currentPage > totalPages) {
+            // Por ejemplo, tras aplicar un filtro o si la ultima pagina quedo vacia.
+            currentPage = totalPages;
+            loadData();
+            return;
+        }
         currentPage = result.getPage();
 
         tableModel.setRowCount(0);
+        currentItems.clear();
+        currentItems.addAll(result.getItems());
         for (Question q : result.getItems()) {
             tableModel.addRow(new Object[]{q.getId().substring(0, 8), q.getTopic(), q.getCompetence(),
                     q.getDirectQuestion(), q.getState().getLabel()});
@@ -169,15 +209,77 @@ public class MyQuestionsFrame extends JFrame implements Observer {
                 result.getPage(), result.getTotalPages(), result.getTotalItems()));
     }
 
-    private void onChangeState() {
+    /** @return la pregunta seleccionada en la tabla, o null (avisando al usuario). */
+    private Question selectedQuestion() {
         int row = table.getSelectedRow();
-        if (row < 0) {
+        if (row < 0 || row >= currentItems.size()) {
             JOptionPane.showMessageDialog(this, "Seleccione una pregunta de la tabla.",
                     "Sin seleccion", JOptionPane.WARNING_MESSAGE);
+            return null;
+        }
+        return currentItems.get(row);
+    }
+
+    /** HU03: ver todos los datos de una pregunta. */
+    private void onViewDetail() {
+        Question q = selectedQuestion();
+        if (q == null) {
             return;
         }
-        String shortId = (String) tableModel.getValueAt(row, 0);
-        Question full = findByShortId(shortId);
+        StringBuilder sb = new StringBuilder();
+        sb.append("ID: ").append(q.getId()).append('\n');
+        sb.append("Estado: ").append(q.getState().getLabel()).append('\n');
+        sb.append("Creada: ").append(q.getCreatedAt()).append("\n\n");
+        sb.append("CONTEXTO\n").append(q.getContext()).append("\n\n");
+        sb.append("PREGUNTA DIRECTA\n").append(q.getDirectQuestion()).append("\n\n");
+        sb.append("OPCIONES\n");
+        List<String> options = q.getDistractors();
+        for (int i = 0; i < options.size(); i++) {
+            String option = options.get(i);
+            sb.append("  ").append((char) ('A' + i)).append(") ").append(option);
+            if (option.equals(q.getCorrectAnswer())) {
+                sb.append("   <-- respuesta correcta");
+            }
+            sb.append('\n');
+        }
+        sb.append("\nJUSTIFICACION\n").append(q.getJustification()).append("\n\n");
+        sb.append("BIBLIOGRAFIA\n").append(q.getBibliography()).append("\n\n");
+        sb.append("Competencia: ").append(q.getCompetence()).append('\n');
+        sb.append("Tema: ").append(q.getTopic()).append('\n');
+        sb.append("Subtema: ").append(q.getSubtopic()).append('\n');
+        sb.append("Nivel de dificultad: ").append(q.getDifficultyLevel()).append('\n');
+        if (!q.getAssignedReviewers().isEmpty()) {
+            sb.append("Revisores asignados: ").append(String.join(", ", q.getAssignedReviewers())).append('\n');
+        }
+
+        JTextArea area = new JTextArea(sb.toString(), 22, 60);
+        area.setEditable(false);
+        area.setLineWrap(true);
+        area.setWrapStyleWord(true);
+        area.setCaretPosition(0);
+        JOptionPane.showMessageDialog(this, new JScrollPane(area),
+                "Detalle de la pregunta", JOptionPane.PLAIN_MESSAGE);
+    }
+
+    /** HU03: editar una pregunta propia que sigue en estado Borrador. */
+    private void onEdit() {
+        Question q = selectedQuestion();
+        if (q == null) {
+            return;
+        }
+        if (q.getState() != QuestionState.BORRADOR) {
+            JOptionPane.showMessageDialog(this,
+                    "Solo se pueden editar preguntas en estado Borrador.\n"
+                            + "Esta pregunta esta en estado: " + q.getState().getLabel(),
+                    "No editable", JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        new CreateQuestionFrame(context, q).setVisible(true);
+        // La tabla se refresca sola al guardar: QuestionService notifica a los Observer.
+    }
+
+    private void onChangeState() {
+        Question full = selectedQuestion();
         if (full == null) {
             return;
         }
@@ -194,13 +296,22 @@ public class MyQuestionsFrame extends JFrame implements Observer {
         }
     }
 
-    private Question findByShortId(String shortId) {
-        QuestionFilterCriteria criteria = new QuestionFilterCriteria()
-                .setAuthorLogin(context.getLoggedInUser().getLogin())
-                .setPage(1).setPageSize(1000);
-        return context.getQuestionService().listarMisPreguntas(criteria).getItems().stream()
-                .filter(q -> q.getId().startsWith(shortId))
-                .findFirst().orElse(null);
+    /** HU02: leyenda con el color de cada estado. */
+    private JPanel buildColorLegend() {
+        JPanel legend = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 2));
+        UiTheme.applyBackground(legend);
+        JLabel title = new JLabel("Estados:");
+        title.setForeground(UiTheme.TEXT);
+        legend.add(title);
+        for (QuestionState state : QuestionState.values()) {
+            JLabel chip = new JLabel(" " + state.getLabel() + " ");
+            chip.setOpaque(true);
+            chip.setBackground(state.getColor());
+            chip.setForeground(Color.BLACK);
+            chip.setBorder(BorderFactory.createEmptyBorder(3, 6, 3, 6));
+            legend.add(chip);
+        }
+        return legend;
     }
 
     @Override
