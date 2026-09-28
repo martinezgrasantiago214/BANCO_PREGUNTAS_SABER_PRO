@@ -11,6 +11,7 @@ import co.unicauca.saberpro.domain.Question;
 import co.unicauca.saberpro.domain.QuestionRequest;
 import co.unicauca.saberpro.domain.QuestionState;
 import co.unicauca.saberpro.microkernel.plugins.MultipleChoiceQuestionPlugin;
+import co.unicauca.saberpro.service.IEmailService;
 import co.unicauca.saberpro.service.OperationResult;
 import co.unicauca.saberpro.service.PagedResult;
 import co.unicauca.saberpro.service.QuestionFilterCriteria;
@@ -55,9 +56,11 @@ import java.util.List;
 public class QuestionController {
 
     private final QuestionService questionService;
+    private final IEmailService emailService;
 
-    public QuestionController(QuestionService questionService) {
+    public QuestionController(QuestionService questionService, IEmailService emailService) {
         this.questionService = questionService;
+        this.emailService = emailService;
     }
 
     @GetMapping
@@ -123,11 +126,18 @@ public class QuestionController {
     }
 
     @PatchMapping("/{id}/reviewers")
-    public synchronized QuestionResponseDTO assignReviewers(@PathVariable("id") String id,
-                                                            @RequestBody AssignReviewersDTO body) {
+    public synchronized ResponseEntity<QuestionResponseDTO> assignReviewers(@PathVariable("id") String id,
+                                                                            @RequestBody AssignReviewersDTO body) {
         findOrThrow(id);
+        emailService.consumeDeliveryReport(); // descarta reportes anteriores
         OperationResult result = questionService.asignarRevisores(id, body.getReviewers());
-        return QuestionResponseDTO.from(unwrap(result));
+        Question updated = unwrap(result);
+        // Resumen de las notificaciones de HU04 (enviado / simulado) en una cabecera informativa.
+        String report = String.join(" | ", emailService.consumeDeliveryReport())
+                .replaceAll("[^\\x20-\\x7E]", "?");
+        return ResponseEntity.ok()
+                .header("X-Email-Notifications", report)
+                .body(QuestionResponseDTO.from(updated));
     }
 
     // ----------------------------------------------------------------- helpers

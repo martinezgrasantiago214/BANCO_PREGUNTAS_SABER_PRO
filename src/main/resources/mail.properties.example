@@ -1,11 +1,26 @@
-# Copie este archivo como "mail.properties" (mismo classpath, src/main/resources)
-# y complete sus datos para que HU04 envie correos reales via SMTP.
-# Si este archivo no existe, las notificaciones se guardan como .txt en la
-# carpeta outbox/ y se listan en consola (modo simulado), sin romper la app.
+# HU04 - Envio REAL de correos a los revisores.
+#
+# 1. Copie este archivo en la misma carpeta con el nombre "mail.properties"
+#    (src/main/resources/mail.properties).
+# 2. Complete sus datos. Con Gmail:
+#    - Active la verificacion en 2 pasos en su cuenta de Google.
+#    - Cree una "Contrasena de aplicacion" en
+#      https://myaccount.google.com/apppasswords  (16 letras)
+#    - Use esa contrasena de aplicacion abajo, NO su contrasena normal.
+# 3. Vuelva a ejecutar la aplicacion.
+#
+# Si "mail.properties" NO existe (o el envio falla), las notificaciones se
+# guardan como .txt en ~/BancoPreguntasSaberPro/outbox/ (modo simulado)
+# y la app sigue funcionando. mail.properties esta en .gitignore para que
+# su contrasena NUNCA se suba a GitHub.
+
 mail.smtp.host=smtp.gmail.com
 mail.smtp.port=587
-mail.smtp.auth=true
 mail.smtp.starttls.enable=true
 mail.smtp.user=tu_correo@gmail.com
-mail.smtp.password=tu_password_de_aplicacion
+mail.smtp.password=tu_contrasena_de_aplicacion
 mail.smtp.from=tu_correo@gmail.com
+
+# Alternativa con SSL directo (en lugar de STARTTLS):
+# mail.smtp.port=465
+# mail.smtp.ssl.enable=true
