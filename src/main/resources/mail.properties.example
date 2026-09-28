@@ -1,0 +1,11 @@
+# Copie este archivo como "mail.properties" (mismo classpath, src/main/resources)
+# y complete sus datos para que HU04 envie correos reales via SMTP.
+# Si este archivo no existe, las notificaciones se guardan como .txt en la
+# carpeta outbox/ y se listan en consola (modo simulado), sin romper la app.
+mail.smtp.host=smtp.gmail.com
+mail.smtp.port=587
+mail.smtp.auth=true
+mail.smtp.starttls.enable=true
+mail.smtp.user=tu_correo@gmail.com
+mail.smtp.password=tu_password_de_aplicacion
+mail.smtp.from=tu_correo@gmail.com

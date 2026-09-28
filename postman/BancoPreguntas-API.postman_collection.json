@@ -1,0 +1,374 @@
+{
+  "info": {
+    "name": "Banco de Preguntas Saber PRO - API REST",
+    "description": "Taller de Microservicios - API REST con Spring Boot sobre el proyecto Banco de Preguntas Saber PRO.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 GET plugins del microkernel",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/plugins",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "plugins"
+          ]
+        },
+        "description": "Plugins cargados por Reflexion desde plugins.properties"
+      }
+    },
+    {
+      "name": "02 GET revisores",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/users/reviewers",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "users",
+            "reviewers"
+          ]
+        },
+        "description": ""
+      }
+    },
+    {
+      "name": "03 POST crear pregunta (valida)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions"
+          ]
+        },
+        "description": "Pasa por el microkernel y el pipeline de 5 filtros. Guarda el id en {{questionId}}",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"MULTIPLE_CHOICE\",\n  \"context\": \"Una empresa necesita que su banco de preguntas admita nuevos tipos de pregunta sin modificar el nucleo del sistema.\",\n  \"directQuestion\": \"¿Que patron arquitectonico permite agregar funcionalidad mediante plugins sin modificar el nucleo?\",\n  \"distractors\": [\n    \"Microkernel\",\n    \"Cliente-Servidor\",\n    \"Capas\",\n    \"Broker\"\n  ],\n  \"correctAnswer\": \"Microkernel\",\n  \"justification\": \"El patron Microkernel separa un nucleo minimo de los plugins que extienden su funcionalidad.\",\n  \"bibliography\": \"Richards, M. Software Architecture Patterns. O'Reilly, 2015.\",\n  \"competence\": \"Arquitectura de software\",\n  \"topic\": \"Patrones arquitectonicos\",\n  \"subtopic\": \"Microkernel\",\n  \"difficultyLevel\": \"MEDIO\",\n  \"authorLogin\": \"autor1\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.collectionVariables.set('questionId', pm.response.json().id);"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "name": "04 POST crear pregunta (invalida -> 400)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions"
+          ]
+        },
+        "description": "El pipeline rechaza la pregunta y la API responde 400 con el filtro que fallo",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"MULTIPLE_CHOICE\",\n  \"context\": \"\",\n  \"directQuestion\": \"\",\n  \"distractors\": [\n    \"A\",\n    \"A\"\n  ],\n  \"correctAnswer\": \"Z\",\n  \"authorLogin\": \"autor1\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "05 GET listar preguntas (paginado)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions?author=autor1&page=1&size=5",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions"
+          ],
+          "query": [
+            {
+              "key": "author",
+              "value": "autor1"
+            },
+            {
+              "key": "page",
+              "value": "1"
+            },
+            {
+              "key": "size",
+              "value": "5"
+            }
+          ]
+        },
+        "description": ""
+      }
+    },
+    {
+      "name": "06 GET pregunta por id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions/{{questionId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions",
+            "{{questionId}}"
+          ]
+        },
+        "description": ""
+      }
+    },
+    {
+      "name": "07 PUT editar pregunta",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions/{{questionId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions",
+            "{{questionId}}"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"MULTIPLE_CHOICE\",\n  \"context\": \"Una empresa necesita que su banco de preguntas admita nuevos tipos de pregunta sin modificar el nucleo del sistema.\",\n  \"directQuestion\": \"¿Que patron arquitectonico permite extender un sistema con plugins cargados dinamicamente sin tocar su nucleo?\",\n  \"distractors\": [\n    \"Microkernel\",\n    \"Cliente-Servidor\",\n    \"Capas\",\n    \"Broker\"\n  ],\n  \"correctAnswer\": \"Microkernel\",\n  \"justification\": \"El patron Microkernel separa un nucleo minimo de los plugins que extienden su funcionalidad.\",\n  \"bibliography\": \"Richards, M. Software Architecture Patterns. O'Reilly, 2015.\",\n  \"competence\": \"Arquitectura de software\",\n  \"topic\": \"Patrones arquitectonicos\",\n  \"subtopic\": \"Microkernel y plugins\",\n  \"difficultyLevel\": \"ALTO\",\n  \"authorLogin\": \"autor1\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "08 PATCH enviar a revision (HU02)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions/{{questionId}}/submit-review",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions",
+            "{{questionId}}",
+            "submit-review"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"authorLogin\": \"autor1\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "09 PUT editar pregunta ya enviada (-> 400)",
+      "request": {
+        "method": "PUT",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions/{{questionId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions",
+            "{{questionId}}"
+          ]
+        },
+        "description": "Regla de negocio: solo se editan preguntas en Borrador",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"type\": \"MULTIPLE_CHOICE\",\n  \"context\": \"Una empresa necesita que su banco de preguntas admita nuevos tipos de pregunta sin modificar el nucleo del sistema.\",\n  \"directQuestion\": \"¿Que patron arquitectonico permite extender un sistema con plugins cargados dinamicamente sin tocar su nucleo?\",\n  \"distractors\": [\n    \"Microkernel\",\n    \"Cliente-Servidor\",\n    \"Capas\",\n    \"Broker\"\n  ],\n  \"correctAnswer\": \"Microkernel\",\n  \"justification\": \"El patron Microkernel separa un nucleo minimo de los plugins que extienden su funcionalidad.\",\n  \"bibliography\": \"Richards, M. Software Architecture Patterns. O'Reilly, 2015.\",\n  \"competence\": \"Arquitectura de software\",\n  \"topic\": \"Patrones arquitectonicos\",\n  \"subtopic\": \"Microkernel y plugins\",\n  \"difficultyLevel\": \"ALTO\",\n  \"authorLogin\": \"autor1\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "10 PATCH asignar revisores (HU04)",
+      "request": {
+        "method": "PATCH",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions/{{questionId}}/reviewers",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions",
+            "{{questionId}}",
+            "reviewers"
+          ]
+        },
+        "description": "",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"reviewers\": [\n    \"rev1\",\n    \"rev2\"\n  ]\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "11 DELETE eliminar pregunta",
+      "request": {
+        "method": "DELETE",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions/{{questionId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions",
+            "{{questionId}}"
+          ]
+        },
+        "description": "Eliminacion logica: el estado pasa a ELIMINADA"
+      }
+    },
+    {
+      "name": "12 GET pregunta eliminada",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions/{{questionId}}",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions",
+            "{{questionId}}"
+          ]
+        },
+        "description": ""
+      }
+    },
+    {
+      "name": "13 GET pregunta inexistente (-> 404)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions/no-existe",
+          "host": [
+            "{{baseUrl}}"
+          ],
+          "path": [
+            "api",
+            "questions",
+            "no-existe"
+          ]
+        },
+        "description": ""
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "questionId",
+      "value": ""
+    }
+  ]
+}
