@@ -1,0 +1,39 @@
+@startuml c4-componentes
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Component.puml
+LAYOUT_TOP_DOWN()
+title Diagrama de Componentes (C4 nivel 3) - Aplicacion de escritorio
+
+Person(autor, "Autor de preguntas", "Docente que crea preguntas y las envia a revision.")
+Person(admin, "Administrador", "Docente que asigna revisores.")
+
+Container_Boundary(desktop, "Aplicacion de escritorio [Java 17, Swing]") {
+  Component(vistas, "Vistas Swing", "presentation (MVC: Vista)", "Ventanas de login, crear/editar pregunta, mis preguntas y asignar revisores. 'Mis preguntas' es Observer y se refresca sola.")
+  Component(qservice, "QuestionService", "service (MVC: Controlador)", "Coordina HU01-HU04: crear, editar, cambiar estado, listar y asignar revisores. Es el Subject que notifica a las vistas.")
+  Component(uservice, "UserService", "service", "Registro y autenticacion de usuarios con politica de contrasenas y cifrado PBKDF2 inyectados (SOLID).")
+  Component(kernel, "QuestionMicrokernel", "microkernel.core", "Nucleo que carga por Reflexion los plugins declarados en plugins.properties y delega en el que soporta el tipo de pregunta.")
+  Component(plugins, "Plugins de pregunta", "microkernel.plugins", "Seleccion multiple, caso y multimedia. Cada uno valida con su pipeline antes de construir la pregunta.")
+  Component(pipeline, "Pipeline de validacion", "microkernel.pipeline", "Tuberias y filtros: contenido, opciones, clasificacion, respuesta correcta y metadatos (validacion estructural de HU01).")
+  Component(repos, "Repositorios", "access", "IQuestionRepository e IUserRepository con implementacion SQLite. Filtran y paginan las preguntas (HU03).")
+  Component(email, "Servicio de correo", "service (IEmailService)", "Envia la notificacion de HU04 por SMTP; si no hay servidor configurado la guarda en la bandeja local.")
+}
+
+ContainerDb(db, "Base de datos", "SQLite", "Usuarios y preguntas.")
+System_Ext(correo, "Servidor de correo", "Servicio SMTP existente (por ejemplo Gmail).")
+
+Rel(autor, vistas, "Usa")
+Rel(admin, vistas, "Usa")
+Rel(vistas, qservice, "Solicita operaciones sobre preguntas")
+Rel(vistas, uservice, "Autentica y registra usuarios")
+Rel(qservice, vistas, "Notifica cambios de estado", "Observer")
+Rel(qservice, kernel, "Crea y valida preguntas con")
+Rel(kernel, plugins, "Carga por Reflexion y ejecuta")
+Rel(plugins, pipeline, "Valida la pregunta con")
+Rel(qservice, repos, "Guarda y consulta preguntas en")
+Rel(uservice, repos, "Guarda y consulta usuarios en")
+Rel(qservice, uservice, "Obtiene los revisores de")
+Rel(qservice, email, "Notifica a los revisores con")
+Rel(repos, db, "Lee y escribe", "JDBC")
+Rel(email, correo, "Envia correos usando", "SMTP/STARTTLS")
+
+SHOW_LEGEND()
+@enduml

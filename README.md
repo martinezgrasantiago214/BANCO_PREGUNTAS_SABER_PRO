@@ -21,8 +21,8 @@ de la materia:
 | HU | Descripcion | Donde esta implementada |
 |----|-------------|--------------------------|
 | HU01 | Crear preguntas de seleccion multiple con unica respuesta, con Contexto, Pregunta directa, 4 distractores, Respuesta correcta, Justificacion, Bibliografia, Competencia, Tema, Subtema y Nivel de dificultad. Al grabar se aplica validacion estructural. | `presentation/CreateQuestionFrame` -> `service/QuestionService.crearPregunta()` -> `microkernel/core/QuestionMicrokernel` -> `microkernel/plugins/MultipleChoiceQuestionPlugin` -> pipeline de 5 filtros en `microkernel/pipeline/filters` (HU03) |
-| HU02 | Cambiar el estado de "borrador" a "Pendiente de revision", visualizando los estados con colores. | `presentation/MyQuestionsFrame` (columna de estado coloreada, `QuestionState.getColor()`) -> `service/QuestionService.marcarPendienteDeRevision()` |
-| HU03 | Listar las preguntas propias, con paginacion y filtros. | `presentation/MyQuestionsFrame` (filtros de estado/tema/palabra clave + paginacion) -> `service/QuestionService.listarMisPreguntas()` -> `access/SQLiteQuestionRepository.search()` |
+| HU02 | Cambiar el estado de "borrador" a "Pendiente de revision", visualizando los estados con colores. | `presentation/MyQuestionsFrame` (columna de estado coloreada y leyenda de colores, `QuestionState.getColor()`) -> `service/QuestionService.marcarPendienteDeRevision()` |
+| HU03 | Listar las preguntas propias, con paginacion y filtros, para verlas y editarlas. | `presentation/MyQuestionsFrame` (filtros de estado/tema/palabra clave, paginacion, "Ver detalle" y "Editar") -> `service/QuestionService.listarMisPreguntas()` / `actualizarPregunta()` -> `access/SQLiteQuestionRepository.search()`. La edicion reutiliza `CreateQuestionFrame` y pasa por el mismo pipeline de validacion. |
 | HU04 | El administrador asigna al menos un revisor a preguntas "Pendiente de revision"; el sistema envia un correo de notificacion. | `presentation/AssignReviewersFrame` -> `service/QuestionService.asignarRevisores()` -> `service/SmtpEmailService` |
 
 La capa de usuarios (login, registro, roles Administrador / Autor de
@@ -58,7 +58,7 @@ co.unicauca.saberpro
 │    ├── common         Contrato QuestionPlugin
 │    ├── pipeline        QuestionFilter/QuestionPipeline + filtros
 │    └── plugins         MultipleChoice / Case / Multimedia
-├── api              API REST (Spring Boot): controller / dto / exception / config
+├── api               API REST (Spring Boot): controller / dto / exception / config
 ├── infra             Observer, Subject (patron Observer)
 └── presentation       LoginFrame, RegisterFrame, MainFrame, CreateQuestionFrame,
                         MyQuestionsFrame, AssignReviewersFrame
@@ -110,8 +110,8 @@ capas `service` / `microkernel` / `access`. No duplica logica: el
 `QuestionController` llama a `QuestionService`, que a su vez usa el
 microkernel (con su pipeline de filtros) y `SQLiteQuestionRepository`. Ambas
 aplicaciones comparten la base de datos `~/BancoPreguntasSaberPro/bancopreguntas.db`,
-asi que una pregunta creada por Postman aparece en "Mis preguntas" del
-escritorio (al volver a abrir o refrescar la ventana) y viceversa.
+asi que una pregunta creada desde Postman aparece en "Mis preguntas" del
+escritorio y viceversa.
 
 ```
 co.unicauca.saberpro.api
@@ -124,13 +124,17 @@ co.unicauca.saberpro.api
 
 ### Ejecutar la API
 
-```bash
-mvn spring-boot:run
-```
+El proyecto tiene **dos puntos de entrada independientes**:
 
-o, desde el IDE, ejecutar `co.unicauca.saberpro.api.BancoPreguntasApiApplication`.
-Queda escuchando en `http://localhost:8080`. La app Swing se sigue
-ejecutando igual que antes (`mvn compile exec:java` / `MainApp`).
+| Clase | Que arranca |
+|-------|-------------|
+| `presentation/MainApp` | Aplicacion de escritorio (Swing) |
+| `api/BancoPreguntasApiApplication` | **API REST** en `http://localhost:8080` |
+
+Desde el IDE, ejecutar el `main` de `co.unicauca.saberpro.api.BancoPreguntasApiApplication`,
+o por consola `mvn spring-boot:run`. Funciona cuando la consola muestra
+`Started BancoPreguntasApiApplication`. Prueba rapida en el navegador:
+`http://localhost:8080/api/plugins`.
 
 ### Endpoints
 
@@ -166,8 +170,10 @@ Ejemplo de body para POST/PUT:
 ```
 
 En `postman/BancoPreguntas-API.postman_collection.json` hay una coleccion
-lista para importar con las 13 peticiones en orden de demostracion (el `id`
-creado por el POST se guarda automaticamente en la variable `questionId`).
+con las 13 peticiones en orden de demostracion (el `id` creado por el POST se
+guarda en la variable `questionId`). Si la extension de Postman para VS Code
+no la importa, se puede importar con Postman de escritorio o crear las
+peticiones a mano con los datos de la tabla anterior.
 
 ### Decisiones de diseno
 
@@ -184,34 +190,53 @@ creado por el POST se guarda automaticamente en la variable `questionId`).
 
 ## Notificacion por correo (HU04)
 
-`SmtpEmailService` implementa un cliente SMTP minimo escrito solo con
-`java.net.Socket` (sin dependencias externas). Para enviar correos reales,
-copie `src/main/resources/mail.properties.example` a
-`src/main/resources/mail.properties` y complete host/usuario/clave. **Si ese
-archivo no existe** (configuracion por defecto), cada notificacion se
-registra igualmente como un archivo `.txt` en la carpeta `outbox/` y en
-consola, de modo que HU04 sea verificable sin depender de un servidor SMTP.
+`SmtpEmailService` implementa un cliente SMTP escrito solo con clases del JDK
+(`java.net.Socket` y `javax.net.ssl`), sin dependencias externas. Soporta
+STARTTLS (puerto 587) y SSL (puerto 465), que es lo que exigen Gmail y
+Outlook.
+
+**Para enviar correos reales (por ejemplo con Gmail):**
+1. Copie `src/main/resources/mail.properties.example` como
+   `src/main/resources/mail.properties`.
+2. En su cuenta de Google active la verificacion en 2 pasos y cree una
+   *contrasena de aplicacion* en https://myaccount.google.com/apppasswords.
+3. Ponga su correo y esa contrasena de aplicacion en `mail.properties`.
+4. Registre (como admin) un revisor con un correo real y asignelo.
+
+`mail.properties` esta en `.gitignore`: la contrasena nunca se sube a GitHub.
+
+**Si ese archivo no existe** (configuracion por defecto) o el envio falla,
+cada notificacion se guarda como `.txt` en
+`~/BancoPreguntasSaberPro/outbox/`. En ambos casos, al asignar revisores el
+administrador ve un mensaje que indica, por cada revisor, si el correo se
+**envio** o se **simulo** (y donde quedo el archivo).
 
 ## Pruebas unitarias
 
-`src/test/java` contiene pruebas JUnit 5 para:
-- Cada filtro del pipeline y su combinacion completa (`QuestionPipelineTest`).
-- El nucleo del microkernel, incluida la carga por reflexion (`QuestionMicrokernelTest`).
-- `UserService` (registro, politica de contrasenas, login, listado de revisores).
-- `QuestionService`, cubriendo extremo a extremo las 4 historias de usuario
-  (`QuestionServiceTest`).
-- Reglas basicas de la entidad `Question` (`QuestionTest`).
+`src/test/java` contiene 13 clases de prueba JUnit 5 que cubren todas las
+entidades y servicios del dominio:
 
-Ejecutar con `mvn test`. Las pruebas usan dobles en memoria
+| Area | Clases de prueba |
+|------|------------------|
+| Entidades | `QuestionTest`, `UserTest`, `QuestionRequestTest`, `EnumsTest` |
+| Servicios | `QuestionServiceTest` (HU01-HU04 de punta a punta, mas editar/eliminar), `UserServiceTest`, `DefaultPasswordPolicyTest`, `PBKDF2PasswordHasherTest`, `SmtpEmailServiceTest`, `SupportClassesTest` |
+| Microkernel | `QuestionMicrokernelTest` (carga por reflexion), `QuestionPipelineTest` (cada filtro) |
+| Transversal | `SubjectTest` (patron Observer) |
+
+Ejecutar con `mvn test`, o desde la pestana *Testing* (icono del matraz) de
+VS Code. Las pruebas de servicios usan dobles en memoria
 (`testdoubles/InMemoryUserRepositoryFake`, `InMemoryQuestionRepositoryFake`)
 para no depender de SQLite.
 
-> Nota: en el entorno donde se genero esta entrega no hubo acceso a Maven
-> Central, por lo que la logica completa (microkernel, pipeline, servicios,
-> las 4 HU de punta a punta) se verifico manualmente compilando con `javac`
-> y ejecutando un arnes de pruebas equivalente sin dependencias externas
-> (21/21 verificaciones correctas). Al compilar con `mvn test` en un entorno
-> con Internet, estas mismas pruebas quedan disponibles como JUnit 5.
+## Documentacion de arquitectura
+
+En `docs/` esta el material del documento de arquitectura del primer corte:
+
+- `docs/ARQUITECTURA.md`: historias de usuario con criterios de aceptacion,
+  test de usabilidad propuesto, atributos de calidad, escenario de
+  modificabilidad, patrones de diseno, principios SOLID y pruebas.
+- `docs/diagramas/`: diagramas C4 (contexto, contenedores, componentes) y de
+  clases UML, en PlantUML (`.puml`) y como imagen (`.png`).
 
 ## Origen del codigo reutilizado
 
