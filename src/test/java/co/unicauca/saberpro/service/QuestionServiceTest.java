@@ -205,4 +205,24 @@ class QuestionServiceTest {
         assertFalse(questionService.eliminarPregunta(creada.getId()).isSuccess());
         assertFalse(questionService.eliminarPregunta("no-existe").isSuccess());
     }
+
+    @Test
+    void hu04ListarPendientesSoloDevuelvePreguntasPendientesDeRevision() {
+        Question enviada = (Question) questionService.crearPregunta(requestFor("DDD")).getData();
+        questionService.crearPregunta(requestFor("Otro")); // queda en Borrador
+        questionService.marcarPendienteDeRevision(enviada.getId(), "autor1");
+
+        List<Question> pendientes = questionService.listarPendientesDeRevision();
+
+        assertEquals(1, pendientes.size());
+        assertEquals(enviada.getId(), pendientes.get(0).getId());
+    }
+
+    @Test
+    void hu03BuscarPorIdDevuelveLaPreguntaParaVerSuDetalle() {
+        Question creada = (Question) questionService.crearPregunta(requestFor("DDD")).getData();
+
+        assertTrue(questionService.buscarPorId(creada.getId()).isPresent());
+        assertTrue(questionService.buscarPorId("no-existe").isEmpty());
+    }
 }
