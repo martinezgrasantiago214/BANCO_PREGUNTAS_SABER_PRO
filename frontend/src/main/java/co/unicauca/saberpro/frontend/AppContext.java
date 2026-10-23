@@ -1,68 +1,38 @@
-package co.unicauca.saberpro.presentation;
+package co.unicauca.saberpro.frontend;
 
-import co.unicauca.saberpro.access.*;
-import co.unicauca.saberpro.domain.User;
-import co.unicauca.saberpro.microkernel.core.QuestionMicrokernel;
-import co.unicauca.saberpro.service.*;
+import co.unicauca.saberpro.frontend.client.ApiClient;
+import co.unicauca.saberpro.frontend.client.RestApis.RestQuestionApi;
+import co.unicauca.saberpro.frontend.client.RestApis.RestReviewApi;
+import co.unicauca.saberpro.frontend.client.RestApis.RestUserApi;
+import co.unicauca.saberpro.frontend.facade.BancoPreguntasFacade;
 
 /**
- * Contenedor simple de dependencias para la capa de presentacion (evita un
- * framework de inyeccion externo). Se construye una unica vez al arrancar
- * la aplicacion y se comparte entre todas las ventanas Swing.
+ * Contenedor de dependencias del frontend: se construye una vez al arrancar
+ * y se comparte entre todas las ventanas. Las ventanas solo usan la fachada.
+ *
+ * La URL del API Gateway se puede cambiar con -Dsaberpro.gateway.url=...
  */
 public final class AppContext {
 
-    private final UserService userService;
-    private final QuestionService questionService;
-    private final IEmailService emailService;
-    private User loggedInUser;
+    public static final String DEFAULT_GATEWAY_URL = "http://localhost:8080";
+
+    private final BancoPreguntasFacade facade;
 
     public AppContext() {
-        System.out.println("Base de datos: " + co.unicauca.saberpro.access.AppPaths.getDatabaseUrl());
-
-        IUserRepository userRepository = UserRepositoryFactory.getInstance().getRepository("file");
-        DataInitializer.seed(userRepository);
-
-        this.userService = new UserService(userRepository, new DefaultPasswordPolicy(), new PBKDF2PasswordHasher());
-
-        IQuestionRepository questionRepository = QuestionRepositoryFactory.getInstance().getRepository("file");
-        QuestionMicrokernel microkernel = new QuestionMicrokernel();
-        this.emailService = new SmtpEmailService();
-
-        this.questionService = new QuestionService(questionRepository, microkernel, userService, emailService);
-
-        // Si la conexion/tabla de preguntas no se pudo inicializar (por
-        // ejemplo, falta el driver JDBC de SQLite en el classpath), avisar
-        // de inmediato en vez de dejar que la app arranque "normal" y que
-        // luego "Listar preguntas" se vea vacio sin explicacion.
-        String startupError = questionRepository.getLastError();
-        if (startupError != null) {
-            javax.swing.JOptionPane.showMessageDialog(null,
-                    "No fue posible inicializar la base de datos de preguntas.\n"
-                            + "La aplicacion continuara, pero es probable que \"Mis preguntas\" no muestre datos.\n\n"
-                            + startupError,
-                    "Error inicializando la base de datos", javax.swing.JOptionPane.ERROR_MESSAGE);
-        }
+        this(System.getProperty("saberpro.gateway.url", DEFAULT_GATEWAY_URL));
     }
 
-    public UserService getUserService() {
-        return userService;
+    public AppContext(String gatewayUrl) {
+        ApiClient client = new ApiClient(gatewayUrl);
+        this.facade = new BancoPreguntasFacade(new RestUserApi(client), new RestQuestionApi(client),
+                new RestReviewApi(client));
     }
 
-    public QuestionService getQuestionService() {
-        return questionService;
+    public AppContext(BancoPreguntasFacade facade) {
+        this.facade = facade;
     }
 
-    /** Permite a la vista de HU04 mostrar si cada correo se envio o se simulo. */
-    public IEmailService getEmailService() {
-        return emailService;
-    }
-
-    public User getLoggedInUser() {
-        return loggedInUser;
-    }
-
-    public void setLoggedInUser(User loggedInUser) {
-        this.loggedInUser = loggedInUser;
+    public BancoPreguntasFacade getFacade() {
+        return facade;
     }
 }

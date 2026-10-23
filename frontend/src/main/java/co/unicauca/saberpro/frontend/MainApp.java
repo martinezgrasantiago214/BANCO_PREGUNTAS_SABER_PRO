@@ -1,8 +1,13 @@
-package co.unicauca.saberpro.presentation;
+package co.unicauca.saberpro.frontend;
+
+import co.unicauca.saberpro.frontend.ui.LoginFrame;
 
 import javax.swing.SwingUtilities;
 
-/** Punto de entrada de la aplicacion de escritorio (Java Swing). */
+/**
+ * Punto de entrada del frontend de escritorio (Java Swing). Requiere el API
+ * Gateway en ejecucion (por defecto http://localhost:8080).
+ */
 public class MainApp {
 
     public static void main(String[] args) {

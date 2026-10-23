@@ -1,8 +1,8 @@
-package co.unicauca.saberpro.presentation;
+package co.unicauca.saberpro.frontend.ui;
 
-import co.unicauca.saberpro.domain.Role;
-import co.unicauca.saberpro.domain.UserStatus;
-import co.unicauca.saberpro.service.OperationResult;
+import co.unicauca.saberpro.common.contract.Role;
+import co.unicauca.saberpro.frontend.AppContext;
+import co.unicauca.saberpro.frontend.client.ApiException;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -73,22 +73,19 @@ public class RegisterFrame extends JFrame {
     }
 
     private void onRegister() {
-        OperationResult result = context.getUserService().register(
-                txtLogin.getText().trim(),
-                txtFullName.getText().trim(),
-                txtEmail.getText().trim(),
-                (Role) cmbRole.getSelectedItem(),
-                UserStatus.ACTIVO,
-                new String(txtPassword.getPassword())
-        );
-
-        if (result.isSuccess()) {
-            JOptionPane.showMessageDialog(this, "Usuario registrado correctamente. Ya puede iniciar sesion.",
-                    "Registro exitoso", JOptionPane.INFORMATION_MESSAGE);
-            dispose();
-        } else {
-            JOptionPane.showMessageDialog(this, result.getErrorsAsText(),
-                    "No fue posible registrar el usuario", JOptionPane.WARNING_MESSAGE);
+        try {
+            context.getFacade().registerUser(
+                    txtLogin.getText().trim(),
+                    txtFullName.getText().trim(),
+                    txtEmail.getText().trim(),
+                    (Role) cmbRole.getSelectedItem(),
+                    new String(txtPassword.getPassword()));
+        } catch (ApiException ex) {
+            Dialogs.showApiError(this, ex, "No fue posible registrar el usuario");
+            return;
         }
+        JOptionPane.showMessageDialog(this, "Usuario registrado correctamente. Ya puede iniciar sesion.",
+                "Registro exitoso", JOptionPane.INFORMATION_MESSAGE);
+        dispose();
     }
 }

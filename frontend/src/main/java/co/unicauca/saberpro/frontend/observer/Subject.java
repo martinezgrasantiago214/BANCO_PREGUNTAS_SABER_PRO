@@ -1,4 +1,4 @@
-package co.unicauca.saberpro.infra;
+package co.unicauca.saberpro.frontend.observer;
 
 import java.util.ArrayList;
 import java.util.List;

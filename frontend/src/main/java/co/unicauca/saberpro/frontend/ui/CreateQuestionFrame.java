@@ -1,11 +1,11 @@
-package co.unicauca.saberpro.presentation;
+package co.unicauca.saberpro.frontend.ui;
 
-import co.unicauca.saberpro.domain.DifficultyLevel;
-import co.unicauca.saberpro.domain.Question;
-import co.unicauca.saberpro.domain.QuestionField;
-import co.unicauca.saberpro.domain.QuestionRequest;
-import co.unicauca.saberpro.microkernel.plugins.MultipleChoiceQuestionPlugin;
-import co.unicauca.saberpro.service.OperationResult;
+import co.unicauca.saberpro.common.contract.DifficultyLevel;
+import co.unicauca.saberpro.common.contract.QuestionField;
+import co.unicauca.saberpro.frontend.AppContext;
+import co.unicauca.saberpro.frontend.client.ApiException;
+import co.unicauca.saberpro.frontend.model.Models.QuestionForm;
+import co.unicauca.saberpro.frontend.model.Models.QuestionView;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
@@ -19,26 +19,31 @@ import java.util.Map;
 
 /**
  * Formulario para que un autor cree una pregunta de seleccion multiple con
- * unica respuesta (HU01). Al guardar, el sistema valida automaticamente que la
- * informacion este completa y sea consistente (ver microkernel/pipeline).
+ * unica respuesta (HU01). Al guardar, la pregunta se envia al question-service
+ * (via BancoPreguntasFacade y el API Gateway), que aplica la validacion
+ * estructural definitiva.
  *
  * Los campos se agrupan en cuatro secciones que siguen el orden del Diseno
  * Centrado en Evidencia: Enunciado, Opciones de respuesta, Sustento y
  * Clasificacion. Cada campo de texto aplica las reglas de
  * {@link QuestionField}: contador de caracteres y mensaje de error en linea
- * bajo el campo, antes de enviar la pregunta al pipeline. Los botones de accion quedan en una barra fija inferior
- * para que siempre esten visibles aunque el formulario requiera scroll.
+ * bajo el campo, antes de enviar la pregunta al backend. Los botones de accion
+ * quedan en una barra fija inferior para que siempre esten visibles aunque el
+ * formulario requiera scroll.
  *
  * El mismo formulario se reutiliza en modo EDICION (HU03: "listar las
  * preguntas que he creado para poder mas adelante verlas y editarlas"): se
  * abre precargado con una pregunta existente en estado Borrador y, al
- * guardar, los cambios pasan por el mismo pipeline de validacion.
+ * guardar, los cambios pasan por la misma validacion estructural.
  */
 public class CreateQuestionFrame extends JFrame {
 
+    /** Tipo de pregunta de HU01 (fabrica MultipleChoiceQuestionFactory del question-service). */
+    private static final String MULTIPLE_CHOICE = "MULTIPLE_CHOICE";
+
     private final AppContext context;
     /** Pregunta que se esta editando, o null si se esta creando una nueva. */
-    private final Question editing;
+    private final QuestionView editing;
 
     private final JTextArea txtContext = new JTextArea(4, 30);
     private final JTextArea txtDirectQuestion = new JTextArea(2, 30);
@@ -59,7 +64,7 @@ public class CreateQuestionFrame extends JFrame {
     }
 
     /** Modo edicion (HU03) si {@code editing} no es null. */
-    public CreateQuestionFrame(AppContext context, Question editing) {
+    public CreateQuestionFrame(AppContext context, QuestionView editing) {
         super(editing == null ? "Crear pregunta" : "Editar pregunta");
         this.context = context;
         this.editing = editing;
@@ -70,22 +75,22 @@ public class CreateQuestionFrame extends JFrame {
     }
 
     /** Precarga el formulario con los datos de la pregunta a editar. */
-    private void fillForm(Question q) {
-        txtContext.setText(q.getContext());
-        txtDirectQuestion.setText(q.getDirectQuestion());
-        List<String> options = q.getDistractors();
+    private void fillForm(QuestionView q) {
+        txtContext.setText(q.context());
+        txtDirectQuestion.setText(q.directQuestion());
+        List<String> options = q.distractors() != null ? q.distractors() : List.of();
         for (int i = 0; i < txtDistractors.length; i++) {
             txtDistractors[i].setText(i < options.size() ? options.get(i) : "");
         }
         refreshCorrectAnswerOptions();
-        cmbCorrectAnswer.setSelectedItem(q.getCorrectAnswer());
-        txtJustification.setText(q.getJustification());
-        txtBibliography.setText(q.getBibliography());
-        txtCompetence.setText(q.getCompetence());
-        txtTopic.setText(q.getTopic());
-        txtSubtopic.setText(q.getSubtopic());
-        if (q.getDifficultyLevel() != null) {
-            cmbDifficulty.setSelectedItem(q.getDifficultyLevel());
+        cmbCorrectAnswer.setSelectedItem(q.correctAnswer());
+        txtJustification.setText(q.justification());
+        txtBibliography.setText(q.bibliography());
+        txtCompetence.setText(q.competence());
+        txtTopic.setText(q.topic());
+        txtSubtopic.setText(q.subtopic());
+        if (q.difficultyLevel() != null) {
+            cmbDifficulty.setSelectedItem(q.difficultyLevel());
         }
     }
 
@@ -215,8 +220,8 @@ public class CreateQuestionFrame extends JFrame {
 
     /**
      * Valida cada campo de texto con su QuestionField y muestra los errores
-     * bajo el campo correspondiente. El pipeline del microkernel sigue siendo
-     * la validacion estructural definitiva al guardar.
+     * bajo el campo correspondiente. La validacion estructural del
+     * question-service sigue siendo la definitiva al guardar.
      *
      * @return true si todos los campos son validos.
      */
@@ -245,8 +250,9 @@ public class CreateQuestionFrame extends JFrame {
         }
         String correctAnswer = (String) cmbCorrectAnswer.getSelectedItem();
 
-        QuestionRequest request = new QuestionRequest(
-                editing == null ? MultipleChoiceQuestionPlugin.TYPE : editing.getType(),
+        // El autor lo completa la fachada con el usuario autenticado.
+        QuestionForm form = new QuestionForm(
+                editing == null ? MULTIPLE_CHOICE : editing.type(),
                 txtContext.getText().trim(),
                 txtDirectQuestion.getText().trim(),
                 distractors,
@@ -257,23 +263,25 @@ public class CreateQuestionFrame extends JFrame {
                 txtTopic.getText().trim(),
                 txtSubtopic.getText().trim(),
                 (DifficultyLevel) cmbDifficulty.getSelectedItem(),
-                context.getLoggedInUser().getLogin()
+                null
         );
 
-        OperationResult result = editing == null
-                ? context.getQuestionService().crearPregunta(request)
-                : context.getQuestionService().actualizarPregunta(editing.getId(), request);
-        if (result.isSuccess()) {
-            JOptionPane.showMessageDialog(this,
-                    editing == null
-                            ? "Pregunta creada correctamente en estado Borrador."
-                            : "Cambios guardados correctamente.",
-                    "Exito", JOptionPane.INFORMATION_MESSAGE);
-            dispose();
-        } else {
-            JOptionPane.showMessageDialog(this, result.getErrorsAsText(),
-                    "No fue posible guardar la pregunta", JOptionPane.WARNING_MESSAGE);
+        try {
+            if (editing == null) {
+                context.getFacade().createQuestion(form);
+            } else {
+                context.getFacade().updateQuestion(editing.id(), form);
+            }
+        } catch (ApiException ex) {
+            Dialogs.showApiError(this, ex, "No fue posible guardar la pregunta");
+            return;
         }
+        JOptionPane.showMessageDialog(this,
+                editing == null
+                        ? "Pregunta creada correctamente en estado Borrador."
+                        : "Cambios guardados correctamente.",
+                "Exito", JOptionPane.INFORMATION_MESSAGE);
+        dispose();
     }
 
     /** Bloque con titulo que agrupa campos relacionados del formulario. */
