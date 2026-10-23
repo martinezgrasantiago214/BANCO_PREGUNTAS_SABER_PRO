@@ -1,11 +1,11 @@
-package co.unicauca.saberpro.presentation;
+package co.unicauca.saberpro.frontend.ui;
 
-import co.unicauca.saberpro.domain.User;
+import co.unicauca.saberpro.frontend.AppContext;
+import co.unicauca.saberpro.frontend.client.ApiException;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
-import java.util.Optional;
 
 /** Ventana de autenticacion. */
 public class LoginFrame extends JFrame {
@@ -54,8 +54,6 @@ public class LoginFrame extends JFrame {
         c.gridy = 2; c.gridx = 0; c.gridwidth = 2;
         panel.add(buttons, c);
 
-    
-
         root.add(panel, BorderLayout.CENTER);
         setContentPane(root);
         getRootPane().setDefaultButton(btnLogin);
@@ -65,14 +63,12 @@ public class LoginFrame extends JFrame {
         String login = txtLogin.getText().trim();
         String password = new String(txtPassword.getPassword());
 
-        Optional<User> result = context.getUserService().login(login, password);
-        if (result.isEmpty()) {
-            JOptionPane.showMessageDialog(this, "Usuario o contrasena incorrectos, o usuario inactivo.",
-                    "Error de autenticacion", JOptionPane.ERROR_MESSAGE);
+        try {
+            context.getFacade().login(login, password);
+        } catch (ApiException ex) {
+            Dialogs.showApiError(this, ex, "Error de autenticacion");
             return;
         }
-
-        context.setLoggedInUser(result.get());
         new MainFrame(context).setVisible(true);
         dispose();
     }

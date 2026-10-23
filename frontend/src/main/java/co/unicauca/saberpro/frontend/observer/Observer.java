@@ -1,4 +1,4 @@
-package co.unicauca.saberpro.infra;
+package co.unicauca.saberpro.frontend.observer;
 
 /**
  * Patron Observer: contrato que deben cumplir las vistas que necesitan

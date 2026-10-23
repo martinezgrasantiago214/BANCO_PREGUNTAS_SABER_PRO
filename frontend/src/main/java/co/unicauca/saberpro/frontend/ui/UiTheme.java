@@ -1,4 +1,4 @@
-package co.unicauca.saberpro.presentation;
+package co.unicauca.saberpro.frontend.ui;
 
 import javax.swing.*;
 import java.awt.*;
