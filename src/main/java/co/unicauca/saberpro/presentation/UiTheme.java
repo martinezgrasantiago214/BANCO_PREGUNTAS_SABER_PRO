@@ -20,6 +20,13 @@ public final class UiTheme {
     public static final Color BACKGROUND = new Color(0xF4F6F8);  // gris muy claro (fondo)
     public static final Color TEXT = new Color(0x21262B);        // gris oscuro casi negro (texto)
 
+    /**
+     * Color de los mensajes de error en linea de los formularios. Igual que
+     * los colores de estado, queda fuera de la paleta: un error debe
+     * distinguirse de inmediato del texto normal.
+     */
+    public static final Color ERROR = new Color(0xB3261E);
+
     private UiTheme() {
     }
 
