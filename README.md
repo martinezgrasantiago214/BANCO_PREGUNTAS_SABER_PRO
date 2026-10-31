@@ -213,12 +213,12 @@ administrador ve un mensaje que indica, por cada revisor, si el correo se
 
 ## Pruebas unitarias
 
-`src/test/java` contiene 13 clases de prueba JUnit 5 que cubren todas las
+`src/test/java` contiene 14 clases de prueba JUnit 5 que cubren todas las
 entidades y servicios del dominio:
 
 | Area | Clases de prueba |
 |------|------------------|
-| Entidades | `QuestionTest`, `UserTest`, `QuestionRequestTest`, `EnumsTest` |
+| Entidades | `QuestionTest`, `UserTest`, `QuestionRequestTest`, `QuestionFieldTest`, `EnumsTest` |
 | Servicios | `QuestionServiceTest` (HU01-HU04 de punta a punta, mas editar/eliminar), `UserServiceTest`, `DefaultPasswordPolicyTest`, `PBKDF2PasswordHasherTest`, `SmtpEmailServiceTest`, `SupportClassesTest` |
 | Microkernel | `QuestionMicrokernelTest` (carga por reflexion), `QuestionPipelineTest` (cada filtro) |
 | Transversal | `SubjectTest` (patron Observer) |

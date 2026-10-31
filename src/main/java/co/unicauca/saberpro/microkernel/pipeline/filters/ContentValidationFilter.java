@@ -1,5 +1,6 @@
 package co.unicauca.saberpro.microkernel.pipeline.filters;
 
+import co.unicauca.saberpro.domain.QuestionField;
 import co.unicauca.saberpro.domain.QuestionRequest;
 import co.unicauca.saberpro.microkernel.pipeline.base.QuestionFilter;
 
@@ -9,7 +10,7 @@ import co.unicauca.saberpro.microkernel.pipeline.base.QuestionFilter;
  */
 public class ContentValidationFilter implements QuestionFilter {
 
-    private static final int MIN_LENGTH = 10;
+    private static final int MIN_LENGTH = QuestionField.DIRECT_QUESTION.getMinLength();
 
     @Override
     public boolean process(QuestionRequest request) {
