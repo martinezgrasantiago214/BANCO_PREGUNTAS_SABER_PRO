@@ -1,96 +1,100 @@
-# Backend completo: RabbitMQ + 4 microservicios + API Gateway.
-#
-#   mvn package -DskipTests
-#   docker compose up --build
-#
-# Solo se publican el gateway (8080) y la consola de RabbitMQ (15672,
-# usuario/clave guest/guest); los servicios se hablan por la red interna.
-# Escalar el envio de correos (consumidores competidores sobre la misma cola):
-#   docker compose up --build --scale notification-service=3
-#
-# Para desarrollar desde el IDE basta con levantar el broker:
-#   docker compose up rabbitmq
+# Banco de Preguntas Saber PRO - despliegue completo de la iteracion 2
+#   mvn -DskipTests package
+#   docker compose up --build -d
+# Escenario de escalabilidad (replicas de consumidores):
+#   docker compose up -d --scale notification-service=3 --scale review-service=2
+
+x-service-env: &service-env
+  SPRING_PROFILES_ACTIVE: docker
+  EUREKA_URL: http://discovery-server:8761/eureka
+  RABBIT_HOST: rabbitmq
+
+x-service-deps: &service-deps
+  rabbitmq:
+    condition: service_healthy
+  postgres:
+    condition: service_healthy
+  discovery-server:
+    condition: service_started
+
 services:
   rabbitmq:
     image: rabbitmq:3.13-management
     ports:
       - "5672:5672"
-      - "15672:15672"
+      - "15672:15672"   # consola: http://localhost:15672 (guest/guest)
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
       interval: 10s
       timeout: 5s
       retries: 10
 
-  user-service:
-    build:
-      context: .
-      args:
-        SERVICE: user-service
+  postgres:
+    image: postgres:16-alpine
     environment:
-      SABERPRO_DATA_DIR: /data
+      POSTGRES_USER: saberpro
+      POSTGRES_PASSWORD: saberpro
+      POSTGRES_DB: postgres
+    ports:
+      - "5433:5432"
     volumes:
-      - user-data:/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U saberpro"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
-  question-service:
-    build:
-      context: .
-      args:
-        SERVICE: question-service
-    environment:
-      RABBITMQ_HOST: rabbitmq
-      SABERPRO_DATA_DIR: /data
-    volumes:
-      - question-data:/data
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-
-  review-service:
-    build:
-      context: .
-      args:
-        SERVICE: review-service
-    environment:
-      RABBITMQ_HOST: rabbitmq
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-
-  notification-service:
-    build:
-      context: .
-      args:
-        SERVICE: notification-service
-    environment:
-      RABBITMQ_HOST: rabbitmq
-      USER_SERVICE_URL: http://user-service:8081
-      SABERPRO_OUTBOX_DIR: /outbox
-    volumes:
-      - outbox:/outbox
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      user-service:
-        condition: service_started
+  discovery-server:
+    build: { context: ., args: { MODULE: discovery-server } }
+    ports:
+      - "8761:8761"     # panel Eureka: http://localhost:8761
 
   api-gateway:
-    build:
-      context: .
-      args:
-        SERVICE: api-gateway
+    build: { context: ., args: { MODULE: api-gateway } }
     environment:
-      USER_SERVICE_URL: http://user-service:8081
-      QUESTION_SERVICE_URL: http://question-service:8082
-      REVIEW_SERVICE_URL: http://review-service:8083
+      EUREKA_URL: http://discovery-server:8761/eureka
     ports:
-      - "8080:8080"
+      - "8080:8080"     # unica URL que usa el frontend; Swagger: /swagger-ui.html
     depends_on:
-      - user-service
-      - question-service
-      - review-service
+      - discovery-server
+
+  user-service:
+    build: { context: ., args: { MODULE: user-service } }
+    environment:
+      <<: *service-env
+      SEED_EMAIL_BASE: ${SEED_EMAIL_BASE:-}
+    depends_on: *service-deps
+
+  question-service:
+    build: { context: ., args: { MODULE: question-service } }
+    environment:
+      <<: *service-env
+    depends_on: *service-deps
+
+  review-service:
+    build: { context: ., args: { MODULE: review-service } }
+    environment:
+      <<: *service-env
+      REVIEW_DECISION_POLICY: UNANIMOUS
+    depends_on: *service-deps
+
+  notification-service:
+    build: { context: ., args: { MODULE: notification-service } }
+    environment:
+      <<: *service-env
+      MAIL_MODE: ${MAIL_MODE:-outbox}
+      MAIL_OUTBOX_DIR: /app/outbox
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_FROM: ${MAIL_FROM:-no-reply@saberpro.test}
+      MAIL_SIMULATED_LATENCY_MS: ${MAIL_SIMULATED_LATENCY_MS:-0}
+      LISTENER_CONCURRENCY: ${LISTENER_CONCURRENCY:-2}
+      LISTENER_MAX_CONCURRENCY: ${LISTENER_MAX_CONCURRENCY:-8}
+    volumes:
+      - ./outbox:/app/outbox   # los correos simulados aparecen en ./outbox
+    depends_on: *service-deps
 
 volumes:
-  user-data:
-  question-data:
-  outbox:
+  pgdata:

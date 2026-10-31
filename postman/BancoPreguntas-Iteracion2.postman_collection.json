@@ -1,0 +1,453 @@
+{
+  "info": {
+    "name": "Banco de Preguntas Saber PRO - Iteración 2 (vía API Gateway)",
+    "description": "Ejecutar en orden: recorre HU01 → HU05. Espere ~1 s entre pasos que dependen de eventos (RabbitMQ).",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "api",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "questionId",
+      "value": ""
+    }
+  ],
+  "item": [
+    {
+      "name": "0. Usuarios",
+      "item": [
+        {
+          "name": "Login autor1",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api}}/api/auth/login",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"login\": \"autor1\",\n  \"password\": \"Autor123!\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Revisores disponibles",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api}}/api/users?role=REVISOR"
+          }
+        }
+      ]
+    },
+    {
+      "name": "1. HU01 Crear pregunta",
+      "item": [
+        {
+          "name": "Crear pregunta válida",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "autor1"
+              }
+            ],
+            "url": "{{api}}/api/questions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"MULTIPLE_CHOICE\",\n  \"context\": \"Una empresa necesita escalar el envío de notificaciones de forma independiente.\",\n  \"statement\": \"¿Qué estilo arquitectónico favorece mejor esta necesidad?\",\n  \"options\": [\n    \"Monolito en capas\",\n    \"Microservicios con eventos\",\n    \"Cliente-servidor de dos capas\",\n    \"Pipe and filter\"\n  ],\n  \"correctAnswer\": \"Microservicios con eventos\",\n  \"justification\": \"Cada servicio escala por separado y los eventos desacoplan productores y consumidores.\",\n  \"bibliography\": \"Richards, M. & Ford, N. Fundamentals of Software Architecture, 2020.\",\n  \"competence\": \"Diseño de software\",\n  \"topic\": \"Arquitectura\",\n  \"subtopic\": \"Estilos arquitectónicos\",\n  \"difficulty\": \"MEDIO\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('questionId', pm.response.json().id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Crear pregunta inválida (validación estructural)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "autor1"
+              }
+            ],
+            "url": "{{api}}/api/questions",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"statement\": \"x\",\n  \"options\": [\n    \"A\",\n    \"A\"\n  ]\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('400 con detalles', () => { pm.response.to.have.status(400); pm.expect(pm.response.json().details.length).to.be.above(1); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2. HU03 Listar / editar",
+      "item": [
+        {
+          "name": "Mis preguntas (paginado + filtros)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api}}/api/questions?author=autor1&state=BORRADOR&keyword=estilo&page=1&size=5"
+          }
+        },
+        {
+          "name": "Estados con color (HU02)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api}}/api/questions/catalog/states"
+          }
+        },
+        {
+          "name": "Editar pregunta",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "autor1"
+              }
+            ],
+            "url": "{{api}}/api/questions/{{questionId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"type\": \"MULTIPLE_CHOICE\",\n  \"context\": \"Una empresa necesita escalar el envío de notificaciones de forma independiente.\",\n  \"statement\": \"¿Qué estilo arquitectónico favorece mejor esta necesidad?\",\n  \"options\": [\n    \"Monolito en capas\",\n    \"Microservicios con eventos\",\n    \"Cliente-servidor de dos capas\",\n    \"Pipe and filter\"\n  ],\n  \"correctAnswer\": \"Microservicios con eventos\",\n  \"justification\": \"Cada servicio escala por separado y los eventos desacoplan productores y consumidores.\",\n  \"bibliography\": \"Richards, M. & Ford, N. Fundamentals of Software Architecture, 2020.\",\n  \"competence\": \"Diseño de software\",\n  \"topic\": \"Arquitectura\",\n  \"subtopic\": \"Estilos arquitectónicos\",\n  \"difficulty\": \"MEDIO\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3. HU02 Enviar a revisión",
+      "item": [
+        {
+          "name": "Borrador → Pendiente de revisión",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "autor1"
+              }
+            ],
+            "url": "{{api}}/api/questions/{{questionId}}/submit-for-review"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Pendiente', () => pm.expect(pm.response.json().state).to.eql('PENDIENTE_REVISION'));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "4. HU04 Asignar revisores",
+      "item": [
+        {
+          "name": "Pendientes de asignación",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "admin"
+              }
+            ],
+            "url": "{{api}}/api/reviews/pending-assignment?page=1&size=10"
+          }
+        },
+        {
+          "name": "Asignar 4 revisores (debe fallar)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "admin"
+              }
+            ],
+            "url": "{{api}}/api/reviews/{{questionId}}/reviewers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewerLogins\": [\n    \"rev1\",\n    \"rev2\",\n    \"rev3\",\n    \"admin\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Asignar rev1 y rev2",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "admin"
+              }
+            ],
+            "url": "{{api}}/api/reviews/{{questionId}}/reviewers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"reviewerLogins\": [\n    \"rev1\",\n    \"rev2\"\n  ]\n}"
+            }
+          }
+        },
+        {
+          "name": "Estado de la pregunta (En revisión)",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api}}/api/questions/{{questionId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "5. HU05 Revisar",
+      "item": [
+        {
+          "name": "Asignadas a rev1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "rev1"
+              }
+            ],
+            "url": "{{api}}/api/reviews/assigned?status=ASIGNADA"
+          }
+        },
+        {
+          "name": "Rúbrica",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api}}/api/reviews/catalog/criteria"
+          }
+        },
+        {
+          "name": "rev1 deja observación",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "rev1"
+              }
+            ],
+            "url": "{{api}}/api/reviews/{{questionId}}/observations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"text\": \"El distractor D es poco plausible.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "rev1 aprueba",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "rev1"
+              }
+            ],
+            "url": "{{api}}/api/reviews/{{questionId}}/evaluations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verdict\": \"APROBADA\",\n  \"scores\": [\n    {\n      \"criterion\": \"ALINEACION_COMPETENCIA\",\n      \"score\": 5,\n      \"comment\": \"Bien\"\n    },\n    {\n      \"criterion\": \"CLARIDAD_ENUNCIADO\",\n      \"score\": 5,\n      \"comment\": \"Bien\"\n    },\n    {\n      \"criterion\": \"CALIDAD_DISTRACTORES\",\n      \"score\": 5,\n      \"comment\": \"Bien\"\n    },\n    {\n      \"criterion\": \"JUSTIFICACION_BIBLIOGRAFIA\",\n      \"score\": 5,\n      \"comment\": \"Bien\"\n    }\n  ],\n  \"observation\": \"\"\n}"
+            }
+          }
+        },
+        {
+          "name": "rev2 aprueba (decisión final)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "rev2"
+              }
+            ],
+            "url": "{{api}}/api/reviews/{{questionId}}/evaluations",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"verdict\": \"APROBADA\",\n  \"scores\": [\n    {\n      \"criterion\": \"ALINEACION_COMPETENCIA\",\n      \"score\": 5,\n      \"comment\": \"Bien\"\n    },\n    {\n      \"criterion\": \"CLARIDAD_ENUNCIADO\",\n      \"score\": 5,\n      \"comment\": \"Bien\"\n    },\n    {\n      \"criterion\": \"CALIDAD_DISTRACTORES\",\n      \"score\": 5,\n      \"comment\": \"Bien\"\n    },\n    {\n      \"criterion\": \"JUSTIFICACION_BIBLIOGRAFIA\",\n      \"score\": 5,\n      \"comment\": \"Bien\"\n    }\n  ],\n  \"observation\": \"Muy buena pregunta.\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Autor lee observaciones",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "autor1"
+              }
+            ],
+            "url": "{{api}}/api/reviews/{{questionId}}/observations"
+          }
+        },
+        {
+          "name": "Pregunta Aprobada",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{api}}/api/questions/{{questionId}}"
+          }
+        }
+      ]
+    },
+    {
+      "name": "6. Notificaciones",
+      "item": [
+        {
+          "name": "Bandeja de rev1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "rev1"
+              }
+            ],
+            "url": "{{api}}/api/notifications?page=1&size=10"
+          }
+        },
+        {
+          "name": "Bandeja de autor1",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-User-Login",
+                "value": "autor1"
+              }
+            ],
+            "url": "{{api}}/api/notifications?page=1&size=10"
+          }
+        }
+      ]
+    }
+  ]
+}
