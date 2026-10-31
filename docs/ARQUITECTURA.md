@@ -101,7 +101,36 @@ _(Insertar pantallazo del tablero Jira/Trello con las tareas del Sprint 2, su es
 | Consumidores idempotentes | Se deduplica por `eventId` y las transiciones repetidas se ignoran. |
 | Control de concurrencia optimista | `@Version` en los agregados. |
 | Reintentos + Dead Letter Queue | Los mensajes que fallan tras los reintentos quedan en una DLQ. |
+| Transactional Outbox | El agregado y sus eventos se guardan en la misma transacción; un *relay* los entrega a RabbitMQ. Ver [sección 4.1](#41-publicación-confiable-de-eventos-transactional-outbox). |
 | Paginación en todos los listados | Ningún listado carga todos los registros en memoria. |
+
+### 4.1 Publicación confiable de eventos (Transactional Outbox)
+
+**Problema.** Antes, los servicios guardaban el agregado y *después* publicaban el evento en RabbitMQ, en dos pasos independientes. Si el broker estaba caído o el proceso moría entre ambos pasos, la pregunta quedaba en *Pendiente de revisión*, pero review-service nunca se enteraba y el administrador nunca la veía. Era una inconsistencia silenciosa entre servicios.
+
+**Solución.** Se implementó el patrón *Transactional Outbox* en el módulo `common-outbox`, que usan question-service y review-service:
+
+1. Los adaptadores `OutboxQuestionEventPublisher` y `OutboxReviewEventPublisher` implementan los mismos puertos de antes (`QuestionEventPublisherPort` y `ReviewEventPublisherPort`). En lugar de llamar a RabbitMQ, escriben el evento en la tabla `outbox_message` de la base del servicio. Ni el dominio ni la capa de aplicación cambiaron (DIP).
+2. `UseCaseTransactions` declara, desde `infrastructure`, que cada método público de `QuestionService` y `ReviewService` es transaccional. Así el agregado y sus eventos se confirman juntos o no se confirma nada, y la capa de aplicación sigue sin depender de Spring. `OutboxEventWriter` exige `Propagation.MANDATORY`: si alguien intenta escribir un evento fuera de una transacción, falla de inmediato.
+3. `OutboxRelay` revisa la tabla cada 500 ms. Toma un lote con `SELECT … FOR UPDATE SKIP LOCKED`, de modo que varias réplicas no envían el mismo mensaje. Publica cada evento y espera el *publisher confirm* de RabbitMQ. Solo entonces lo marca como publicado.
+4. Si el broker no responde, el lote se detiene para conservar el orden y se reintenta con *backoff* exponencial (0,5 s, 1 s, 2 s… hasta 30 s).
+5. La garantía es de entrega **al menos una vez**. Un evento puede repetirse si el broker confirmó pero la base falló al marcarlo. Por eso se conserva el `eventId` y los consumidores siguen deduplicando.
+
+**Observabilidad.** `/actuator/health` de cada servicio muestra el componente `outbox`, con `pending`, `oldestPendingSeconds` y `lastError`. Si un evento lleva más de 2 minutos sin salir, el estado pasa a `OUT_OF_SERVICE`. Los mensajes publicados se conservan 7 días para auditoría y luego se purgan.
+
+**Cómo demostrarlo:**
+
+```bash
+docker compose logs -f question-service | grep -i outbox   # en otra terminal
+docker compose stop rabbitmq
+# Enviar una pregunta a revisión desde el cliente: responde normal y queda en "Pendiente".
+# En el log aparecen los reintentos: "Se reintenta en 500 ms… 1000 ms… 2000 ms…"
+docker compose start rabbitmq
+# "conexión con el broker recuperada" → el evento sale, review-service registra la pregunta
+# y el administrador ya la ve para asignar revisores.
+```
+
+Configuración (`saberpro.outbox.*`): `poll-interval`, `batch-size`, `confirm-timeout`, `max-backoff`, `retention` y `max-pending-age`.
 
 ## 5. Diseño de contextos delimitados
 
@@ -217,17 +246,19 @@ Diagrama de clases de los patrones: [`diagramas/07-clases-patrones.puml`](diagra
 | Proyección local en review-service | Consultar question-service por REST | Evita el acoplamiento temporal: la revisión funciona aunque question-service esté caído. |
 | Identidad por cabecera `X-User-Login` | JWT | Mantiene el alcance del corte. JWT validado en el gateway queda como trabajo futuro (atributo de seguridad). |
 | Swing como frontend | Web | Continuidad con la iteración 1 y reutilización de MVC. La separación frontend/backend la garantiza la API REST. |
+| Transactional Outbox con relay por sondeo | Publicar directo tras guardar / CDC con Debezium | Publicar directo pierde eventos si el broker falla. Debezium exige Kafka Connect y otro componente que operar. El sondeo cada 500 ms basta para el volumen del sistema. |
 | Outbox de archivos para correo en la demo | Exigir SMTP | La demo no depende de credenciales. El cambio a SMTP real es solo de configuración (Adapter). |
 
 **Limitaciones conocidas:**
 
-- La publicación del evento ocurre después de guardar en la base, sin *transactional outbox*.
-- No hay autenticación con token.
-- Ambos puntos se documentan como trabajo futuro.
+- ~~La publicación del evento ocurre después de guardar en la base, sin *transactional outbox*.~~ **Resuelto** con `common-outbox` (sección 4.1).
+- No hay autenticación con token. Queda como trabajo futuro.
 
 ## 9. Pruebas unitarias
 
 Se ejecutan con `mvn test`. Hay pruebas para **todas las entidades de dominio y servicios de aplicación** de los 4 microservicios: 92 casos que cubren estados, transiciones válidas e inválidas, reglas de validación, políticas de decisión, idempotencia y permisos. Hay además pruebas de la lógica del cliente.
+
+El *Transactional Outbox* añade 13 pruebas de integración con JPA real sobre H2 y un broker falso. Prueban que el agregado y sus eventos se confirman o se descartan juntos, el orden de entrega, la recuperación tras una caída del broker, el *backoff* y el health. En total son **109 pruebas**.
 
 Se usan *fakes* en memoria (`testdoubles`) gracias a la inversión de dependencias, sin necesidad de base de datos ni broker.
 

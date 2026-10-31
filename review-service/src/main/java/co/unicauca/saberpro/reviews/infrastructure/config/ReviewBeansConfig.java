@@ -12,14 +12,29 @@ import io.swagger.v3.oas.models.info.Info;
 import io.swagger.v3.oas.models.servers.Server;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.cloud.client.loadbalancer.LoadBalanced;
+import co.unicauca.saberpro.outbox.UseCaseTransactions;
+import org.springframework.aop.Advisor;
+import org.springframework.beans.factory.config.BeanDefinition;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Role;
+import org.springframework.transaction.TransactionManager;
 import org.springframework.web.client.RestClient;
 
 import java.util.List;
 
 @Configuration
 public class ReviewBeansConfig {
+
+    /**
+     * Frontera transaccional de los casos de uso: el agregado y sus eventos en
+     * la outbox se confirman juntos. {@code ReviewService} no conoce Spring.
+     */
+    @Bean
+    @Role(BeanDefinition.ROLE_INFRASTRUCTURE)
+    static Advisor useCaseTransactions(TransactionManager transactionManager) {
+        return UseCaseTransactions.advisor(transactionManager, ReviewService.class);
+    }
 
     /** Strategy seleccionada por configuracion: review.decision-policy=UNANIMOUS | MAJORITY. */
     @Bean

@@ -1,0 +1,10 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:outbox-test;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+saberpro:
+  outbox:
+    enabled: false
+    max-pending-age: 1m

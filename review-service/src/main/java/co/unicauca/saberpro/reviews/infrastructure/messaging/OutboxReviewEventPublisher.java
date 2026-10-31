@@ -5,23 +5,25 @@ import co.unicauca.saberpro.reviews.application.port.ReviewEventPublisherPort;
 import co.unicauca.saberpro.reviews.domain.model.Observation;
 import co.unicauca.saberpro.reviews.domain.model.QuestionReview;
 import co.unicauca.saberpro.reviews.domain.model.ReviewerAssignment;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.amqp.rabbit.core.RabbitTemplate;
+import co.unicauca.saberpro.outbox.OutboxEventWriter;
 import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.util.UUID;
 
-/** Adaptador de salida: traduce los hechos del dominio a eventos de integracion. */
+/**
+ * Adaptador de salida: traduce los hechos del dominio a eventos de integracion
+ * y los deja en la outbox, dentro de la transaccion del caso de uso. Asi, por
+ * ejemplo, la evaluacion de un revisor, su observacion y la decision final se
+ * guardan junto con sus eventos o no se guarda nada.
+ */
 @Component
-public class RabbitReviewEventPublisher implements ReviewEventPublisherPort {
+public class OutboxReviewEventPublisher implements ReviewEventPublisherPort {
 
-    private static final Logger log = LoggerFactory.getLogger(RabbitReviewEventPublisher.class);
-    private final RabbitTemplate rabbit;
+    private final OutboxEventWriter outbox;
 
-    public RabbitReviewEventPublisher(RabbitTemplate rabbit) {
-        this.rabbit = rabbit;
+    public OutboxReviewEventPublisher(OutboxEventWriter outbox) {
+        this.outbox = outbox;
     }
 
     @Override
@@ -50,8 +52,7 @@ public class RabbitReviewEventPublisher implements ReviewEventPublisherPort {
     }
 
     private void send(String routingKey, IntegrationEvent event) {
-        rabbit.convertAndSend(EventTopology.EXCHANGE, routingKey, event);
-        log.info("Evento publicado {} para la pregunta {}", routingKey, event.questionId());
+        outbox.enqueue(routingKey, event);
     }
 
     private static String id() {
