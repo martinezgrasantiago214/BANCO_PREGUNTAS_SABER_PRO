@@ -1,6 +1,6 @@
 target/
-data/
-outbox/
+/data/
+/outbox/
 *.log
 .idea/
 *.iml
