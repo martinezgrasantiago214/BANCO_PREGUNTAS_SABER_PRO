@@ -1,0 +1,47 @@
+@startuml secuencia-eventos
+title Flujo orientado a eventos: HU02 -> HU04 -> HU05
+autonumber
+actor Autor
+actor Admin
+actor Revisor
+participant "API Gateway" as GW
+participant "question-service" as QS
+participant "review-service" as RS
+queue "RabbitMQ\nsaberpro.events" as MQ
+participant "notification-service\n(N réplicas)" as NS
+participant "user-service" as US
+
+Autor -> GW : POST /api/questions/{id}/submit-for-review
+GW -> QS
+QS -> QS : Borrador -> Pendiente (State)
+QS -> MQ : question.submitted
+QS --> Autor : 200 Pendiente de revisión
+MQ -> RS : question.submitted
+RS -> RS : crea QuestionReview (PENDIENTE_ASIGNACION)
+MQ -> NS : question.submitted
+NS -> US : GET /api/users?role=ADMINISTRADOR
+NS -> NS : correo + bandeja al admin
+
+Admin -> GW : POST /api/reviews/{id}/reviewers [rev1, rev2]
+GW -> RS
+RS -> US : valida admin y revisores
+RS -> RS : asigna 1..3 revisores
+RS -> MQ : review.reviewers-assigned
+RS --> Admin : 200 En revisión
+MQ -> QS : review.reviewers-assigned
+QS -> QS : Pendiente -> En revisión
+MQ -> NS : review.reviewers-assigned
+NS -> Revisor : correo "Se le asignó una pregunta"
+
+Revisor -> GW : POST /api/reviews/{id}/evaluations
+GW -> RS
+RS -> RS : rúbrica + concepto; DecisionPolicy.decide()
+RS -> MQ : review.evaluation-submitted\nreview.observation-added
+alt hay decisión final
+  RS -> MQ : review.completed (APROBADA | RECHAZADA)
+  MQ -> QS : review.completed
+  QS -> QS : En revisión -> Aprobada/Rechazada
+end
+MQ -> NS : review.*
+NS -> Autor : correo con observaciones y decisión
+@enduml

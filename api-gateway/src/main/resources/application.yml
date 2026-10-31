@@ -1,12 +1,5 @@
 server:
-  port: ${PORT:8080}
-
-# Direcciones de los microservicios. En Docker se reemplazan por el nombre del
-# contenedor (ver docker-compose.yml).
-services:
-  user: ${USER_SERVICE_URL:http://localhost:8081}
-  question: ${QUESTION_SERVICE_URL:http://localhost:8082}
-  review: ${REVIEW_SERVICE_URL:http://localhost:8083}
+  port: 8080
 
 spring:
   application:
@@ -14,39 +7,49 @@ spring:
   cloud:
     gateway:
       routes:
+        # ---------------- APIs de negocio
         - id: user-service
-          uri: ${services.user}
+          uri: lb://user-service
           predicates:
             - Path=/api/auth/**,/api/users/**
         - id: question-service
-          uri: ${services.question}
+          uri: lb://question-service
           predicates:
             - Path=/api/questions/**
         - id: review-service
-          uri: ${services.review}
+          uri: lb://review-service
           predicates:
             - Path=/api/reviews/**
-        # Documentacion OpenAPI de cada servicio, para el Swagger UI del gateway.
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/notifications/**
+        # ---------------- documentos OpenAPI de cada servicio (para el Swagger unificado)
         - id: user-service-docs
-          uri: ${services.user}
+          uri: lb://user-service
           predicates:
             - Path=/docs/user-service/v3/api-docs
           filters:
             - RewritePath=/docs/user-service/(?<path>.*), /$\{path}
         - id: question-service-docs
-          uri: ${services.question}
+          uri: lb://question-service
           predicates:
             - Path=/docs/question-service/v3/api-docs
           filters:
             - RewritePath=/docs/question-service/(?<path>.*), /$\{path}
         - id: review-service-docs
-          uri: ${services.review}
+          uri: lb://review-service
           predicates:
             - Path=/docs/review-service/v3/api-docs
           filters:
             - RewritePath=/docs/review-service/(?<path>.*), /$\{path}
+        - id: notification-service-docs
+          uri: lb://notification-service
+          predicates:
+            - Path=/docs/notification-service/v3/api-docs
+          filters:
+            - RewritePath=/docs/notification-service/(?<path>.*), /$\{path}
 
-# Swagger UI unificado: http://localhost:8080/swagger-ui.html
 springdoc:
   api-docs:
     enabled: true
@@ -59,6 +62,15 @@ springdoc:
         url: /docs/question-service/v3/api-docs
       - name: review-service
         url: /docs/review-service/v3/api-docs
+      - name: notification-service
+        url: /docs/notification-service/v3/api-docs
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
 
 management:
   endpoints:
