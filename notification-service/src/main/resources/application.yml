@@ -4,21 +4,69 @@ server:
 spring:
   application:
     name: notification-service
+  datasource:
+    url: jdbc:h2:file:./data/notifications-db;AUTO_SERVER=TRUE
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.starttls.enable: true
   rabbitmq:
-    host: ${RABBITMQ_HOST:localhost}
-    port: ${RABBITMQ_PORT:5672}
-    username: ${RABBITMQ_USER:guest}
-    password: ${RABBITMQ_PASSWORD:guest}
+    host: ${RABBIT_HOST:localhost}
+    port: 5672
+    username: ${RABBIT_USER:guest}
+    password: ${RABBIT_PASSWORD:guest}
+    listener:
+      simple:
+        concurrency: ${LISTENER_CONCURRENCY:2}
+        max-concurrency: ${LISTENER_MAX_CONCURRENCY:8}
+        prefetch: 10
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 3
+          initial-interval: 1s
 
-saberpro:
-  # Los correos que no se pueden enviar por SMTP se guardan como .txt aqui.
-  outbox-dir: ${SABERPRO_OUTBOX_DIR:${user.home}/BancoPreguntasSaberPro/outbox}
-  # El notification-service consulta el correo de cada usuario en el user-service.
-  user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
+  instance:
+    prefer-ip-address: true
 
-# Este servicio no expone API de negocio: solo reacciona a eventos. HTTP queda para /actuator/health.
+notification:
+  email:
+    # outbox: escribe cada correo como .txt (demo) | smtp: envio real con spring.mail.*
+    mode: ${MAIL_MODE:outbox}
+    outbox-dir: ${MAIL_OUTBOX_DIR:./outbox}
+    from: ${MAIL_FROM:no-reply@saberpro.test}
+    # Emula la latencia de un SMTP real en el escenario de escalabilidad (ms)
+    simulated-latency-ms: ${MAIL_SIMULATED_LATENCY_MS:0}
+
 management:
+  health:
+    mail:
+      enabled: false
   endpoints:
     web:
       exposure:
         include: health,info
+
+---
+spring:
+  config:
+    activate:
+      on-profile: docker
+  datasource:
+    url: jdbc:postgresql://postgres:5432/notifications_db
+    username: saberpro
+    password: saberpro
