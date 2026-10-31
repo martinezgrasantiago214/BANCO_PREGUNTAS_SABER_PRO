@@ -1,0 +1,24 @@
+server:
+  port: ${PORT:8084}
+
+spring:
+  application:
+    name: notification-service
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
+
+saberpro:
+  # Los correos que no se pueden enviar por SMTP se guardan como .txt aqui.
+  outbox-dir: ${SABERPRO_OUTBOX_DIR:${user.home}/BancoPreguntasSaberPro/outbox}
+  # El notification-service consulta el correo de cada usuario en el user-service.
+  user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+
+# Este servicio no expone API de negocio: solo reacciona a eventos. HTTP queda para /actuator/health.
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

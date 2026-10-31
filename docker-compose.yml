@@ -1,0 +1,96 @@
+# Backend completo: RabbitMQ + 4 microservicios + API Gateway.
+#
+#   mvn package -DskipTests
+#   docker compose up --build
+#
+# Solo se publican el gateway (8080) y la consola de RabbitMQ (15672,
+# usuario/clave guest/guest); los servicios se hablan por la red interna.
+# Escalar el envio de correos (consumidores competidores sobre la misma cola):
+#   docker compose up --build --scale notification-service=3
+#
+# Para desarrollar desde el IDE basta con levantar el broker:
+#   docker compose up rabbitmq
+services:
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  user-service:
+    build:
+      context: .
+      args:
+        SERVICE: user-service
+    environment:
+      SABERPRO_DATA_DIR: /data
+    volumes:
+      - user-data:/data
+
+  question-service:
+    build:
+      context: .
+      args:
+        SERVICE: question-service
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      SABERPRO_DATA_DIR: /data
+    volumes:
+      - question-data:/data
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  review-service:
+    build:
+      context: .
+      args:
+        SERVICE: review-service
+    environment:
+      RABBITMQ_HOST: rabbitmq
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+
+  notification-service:
+    build:
+      context: .
+      args:
+        SERVICE: notification-service
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      USER_SERVICE_URL: http://user-service:8081
+      SABERPRO_OUTBOX_DIR: /outbox
+    volumes:
+      - outbox:/outbox
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+
+  api-gateway:
+    build:
+      context: .
+      args:
+        SERVICE: api-gateway
+    environment:
+      USER_SERVICE_URL: http://user-service:8081
+      QUESTION_SERVICE_URL: http://question-service:8082
+      REVIEW_SERVICE_URL: http://review-service:8083
+    ports:
+      - "8080:8080"
+    depends_on:
+      - user-service
+      - question-service
+      - review-service
+
+volumes:
+  user-data:
+  question-data:
+  outbox:
