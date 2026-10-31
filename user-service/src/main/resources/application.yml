@@ -1,0 +1,23 @@
+server:
+  port: ${PORT:8081}
+
+spring:
+  application:
+    name: user-service
+
+saberpro:
+  # Carpeta donde el servicio guarda su propia base de datos SQLite
+  # (cada microservicio tiene su base de datos, no se comparten tablas).
+  data-dir: ${SABERPRO_DATA_DIR:${user.home}/BancoPreguntasSaberPro}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

@@ -1,252 +1,121 @@
-# Banco de Preguntas Saber PRO
+# Banco de Preguntas Saber PRO — Segundo corte (microservicios)
 
-Proyecto **unificado** a partir de los tres repositorios entregados
-(`GestionUsuariosSOLID`, `TallerCapasMVC`, `lisw2_t5_g4`), reescrito como una
-sola aplicacion de escritorio Java Swing que implementa las 4 historias de
-usuario del primer corte, siguiendo la arquitectura exigida por los talleres
-de la materia:
+Refactorizacion del monolito del primer corte a una solucion distribuida con
+**microservicios** y **arquitectura orientada a eventos** (RabbitMQ), con el
+**frontend (Java Swing) separado del backend** y comunicado por **API REST**
+a traves de un **API Gateway**.
 
-- **Arquitectura en capas** (`presentation` / `service` / `domain` / `access` / `infra`).
-- **Micro patron MVC + Observer** (Taller de Capas y MVC).
-- **Microkernel + Tuberias y Filtros**, con carga de plugins por **Reflexion**
-  (Taller de Microkernel).
-- **Principios SOLID** en la gestion de usuarios (Taller SOLID), reutilizados
-  para autenticar autores, administradores y revisores.
-- **API REST con Spring Boot** (Taller de Microservicios): expone el mismo
-  banco de preguntas por HTTP (GET, POST, PUT, DELETE), reutilizando los
-  servicios, el microkernel y la base de datos de la aplicacion de escritorio.
+> El codigo del monolito sigue en el historial de git (commit `74ab78d` y
+> anteriores). Lo reutilizable se migro a los servicios; las pantallas que aun
+> no existen se pueden consultar alli, por ejemplo:
+> `git show 74ab78d:src/main/java/co/unicauca/saberpro/presentation/MyQuestionsFrame.java`
 
-## Como se cubre cada historia de usuario
-
-| HU | Descripcion | Donde esta implementada |
-|----|-------------|--------------------------|
-| HU01 | Crear preguntas de seleccion multiple con unica respuesta, con Contexto, Pregunta directa, 4 distractores, Respuesta correcta, Justificacion, Bibliografia, Competencia, Tema, Subtema y Nivel de dificultad. Al grabar se aplica validacion estructural. | `presentation/CreateQuestionFrame` -> `service/QuestionService.crearPregunta()` -> `microkernel/core/QuestionMicrokernel` -> `microkernel/plugins/MultipleChoiceQuestionPlugin` -> pipeline de 5 filtros en `microkernel/pipeline/filters` (HU03) |
-| HU02 | Cambiar el estado de "borrador" a "Pendiente de revision", visualizando los estados con colores. | `presentation/MyQuestionsFrame` (columna de estado coloreada y leyenda de colores, `QuestionState.getColor()`) -> `service/QuestionService.marcarPendienteDeRevision()` |
-| HU03 | Listar las preguntas propias, con paginacion y filtros, para verlas y editarlas. | `presentation/MyQuestionsFrame` (filtros de estado/tema/palabra clave, paginacion, "Ver detalle" y "Editar") -> `service/QuestionService.listarMisPreguntas()` / `actualizarPregunta()` -> `access/SQLiteQuestionRepository.search()`. La edicion reutiliza `CreateQuestionFrame` y pasa por el mismo pipeline de validacion. |
-| HU04 | El administrador asigna al menos un revisor a preguntas "Pendiente de revision"; el sistema envia un correo de notificacion. | `presentation/AssignReviewersFrame` -> `service/QuestionService.asignarRevisores()` -> `service/SmtpEmailService` |
-
-La capa de usuarios (login, registro, roles Administrador / Autor de
-preguntas / Revisor) es la del Taller SOLID, adaptada al mismo paquete base;
-sigue aplicando SRP, OCP, ISP y DIP (interfaces `IUserRepository`,
-`IPasswordPolicy`, `IPasswordHasher` inyectadas por constructor).
-
-## Arquitectura Microkernel + Tuberias y Filtros (HU01/HU03)
-
-- **Nucleo (`QuestionMicrokernel`)**: guarda el banco de preguntas en un
-  `Map<String, Question>`, lee `plugins.properties` y **carga cada plugin por
-  Reflexion** (`Class.forName(...).getDeclaredConstructor().newInstance()`),
-  sin conocer sus clases concretas.
-- **Plugins** (contrato comun `QuestionPlugin`): `MultipleChoiceQuestionPlugin`
-  (principal, exigido por HU01 y con el pipeline completo de 5 filtros),
-  `CaseQuestionPlugin` y `MultimediaQuestionPlugin` (demuestran que se pueden
-  agregar nuevos tipos de pregunta sin tocar el nucleo).
-- **Pipeline (Tuberias y Filtros)**: `ContentValidationFilter`,
-  `OptionsValidationFilter`, `ClassificationFilter`,
-  `CorrectAnswerValidationFilter` y `MetadataValidationFilter` (justificacion,
-  bibliografia y autor). El pipeline se detiene en el primer filtro que
-  falla y expone el mensaje de error a la interfaz grafica.
-
-## Estructura de paquetes
+## Arquitectura
 
 ```
-co.unicauca.saberpro
-├── domain          Entidades: User, Question, Role, QuestionState, DifficultyLevel...
-├── access           IUserRepository/SQLiteUserRepository, IQuestionRepository/SQLiteQuestionRepository
-├── service           UserService, QuestionService, IEmailService/SmtpEmailService, PagedResult...
-├── microkernel
-│    ├── core          QuestionMicrokernel (nucleo, reflexion)
-│    ├── common         Contrato QuestionPlugin
-│    ├── pipeline        QuestionFilter/QuestionPipeline + filtros
-│    └── plugins         MultipleChoice / Case / Multimedia
-├── api               API REST (Spring Boot): controller / dto / exception / config
-├── infra             Observer, Subject (patron Observer)
-└── presentation       LoginFrame, RegisterFrame, MainFrame, CreateQuestionFrame,
-                        MyQuestionsFrame, AssignReviewersFrame
+ frontend (Swing) ──REST──> api-gateway :8080 ──┬──> user-service :8081          (Gestion de Usuarios)
+                                                ├──> question-service :8082      (Gestion, Validacion y Ciclo de vida de Preguntas)
+                                                └──> review-service :8083        (Revision por Pares)
+
+ question-service ──┐                         ┌──> review-service        (question.submitted)
+ review-service   ──┴─> RabbitMQ (saberpro.events, topic) ─┼──> question-service      (review.evaluated)
+                                                           └──> notification-service :8084 (review.assigned, review.evaluated)
 ```
+
+| Modulo | Que contiene |
+|--------|--------------|
+| `common` | Contratos compartidos: eventos de dominio, enums del API (`QuestionStatus` con su color, `DifficultyLevel`, `Role`, `EvaluationVerdict`), reglas de los campos (`QuestionField`), bus de eventos (Observer) y manejo de errores HTTP. |
+| `user-service` | Login, registro y consulta de usuarios (SQLite propio). |
+| `question-service` | Preguntas: Builder, fabricas por tipo, validacion estructural, estados (State), SQLite propio. Publica `question.created` / `question.submitted`, consume `review.evaluated`. |
+| `review-service` | Asignacion de revisores (HU04) y evaluaciones (HU05). Consume `question.submitted`, publica `review.assigned` / `review.evaluated`. |
+| `notification-service` | Escucha eventos y envia correos (SMTP o bandeja de salida en archivo). Escala con varias instancias sobre las mismas colas. |
+| `api-gateway` | Spring Cloud Gateway: unico punto de entrada y Swagger UI unificado. |
+| `frontend` | Cliente Swing; solo conoce el gateway (via `BancoPreguntasFacade`). |
+
+Cada servicio es dueno de sus datos: ninguno lee la base de datos de otro; se
+comunican por REST (consultas) o por eventos (cambios).
 
 ## Como ejecutar
 
-Requiere JDK 17+ y Maven (con acceso a Internet para descargar
-`sqlite-jdbc` y `junit-jupiter` la primera vez).
+Requisitos: JDK 17+ y Maven. Para los eventos, Docker (RabbitMQ).
 
 ```bash
-mvn compile exec:java
-# o, para generar un jar ejecutable con dependencias:
-mvn package
-java -jar target/BancoPreguntasSaberPro-jar-with-dependencies.jar
+mvn package -DskipTests          # compila todo y genera los jar
+
+# Opcion A: todo el backend en Docker
+docker compose up --build
+
+# Opcion B: desde el IDE / consola
+docker compose up rabbitmq       # solo el broker
+java -jar user-service/target/user-service-2.0.0.jar
+java -jar question-service/target/question-service-2.0.0.jar
+java -jar review-service/target/review-service-2.0.0.jar
+java -jar notification-service/target/notification-service-2.0.0.jar
+java -jar api-gateway/target/api-gateway-2.0.0.jar
+
+# Frontend (con el gateway arriba)
+java -jar frontend/target/frontend-2.0.0.jar
+# o: mvn -pl frontend exec:java
 ```
 
-Al primer arranque se crea la base de datos SQLite en una ubicacion **fija**,
-`~/BancoPreguntasSaberPro/bancopreguntas.db` (dentro de la carpeta personal
-del usuario del sistema operativo, gestionada por `access/AppPaths`), sin
-importar desde que carpeta se ejecute la aplicacion (terminal, IDE, jar,
-etc.). Asi los datos siempre son los mismos entre una ejecucion y otra. Se
-siembran ademas 4 usuarios de prueba (`access/DataInitializer`):
+- Swagger UI unificado: http://localhost:8080/swagger-ui.html
+- Consola de RabbitMQ: http://localhost:15672 (guest / guest)
+- Si el puerto 8080 esta ocupado: `PORT=8090` para el gateway y
+  `-Dsaberpro.gateway.url=http://localhost:8090` para el frontend.
+- Sin RabbitMQ los servicios arrancan y el API responde, pero los eventos no
+  se entregan (el health de los servicios con eventos aparece `DOWN`).
+- Datos: `~/BancoPreguntasSaberPro/` (`user-service.db`, `question-service.db`,
+  `outbox/`). Usuarios de prueba: `admin/Admin123!`, `autor1/Autor123!`,
+  `rev1/Revisor123!`, `rev2/Revisor123!`.
+- Correo real: copiar `notification-service/src/main/resources/mail.properties.example`
+  como `mail.properties` (esta en `.gitignore`).
+- Postman: `postman/BancoPreguntas-API.postman_collection.json` (18 peticiones via gateway).
 
-| Usuario | Contrasena | Rol |
-|---------|------------|-----|
-| admin  | Admin123!   | Administrador |
-| autor1 | Autor123!   | Autor de preguntas |
-| rev1   | Revisor123! | Revisor |
-| rev2   | Revisor123! | Revisor |
+## Patrones de diseno GoF
 
-### Si "Mis preguntas" no muestra datos
+| Tipo | Patron | Donde |
+|------|--------|-------|
+| Creacional | **Builder** | `question-service/.../domain/Question.java` (`Question.builder()`) |
+| Creacional | **Factory Method** | `question-service/.../domain/factory/QuestionFactory.java` y sus subclases (`createQuestion`, `createValidationPipeline`), cargadas por reflexion en `QuestionFactoryRegistry` |
+| Estructural | **Adapter** | `notification-service/.../channel/SmtpEmailChannelAdapter.java` adapta `SmtpMailClient` a `NotificationChannel` |
+| Estructural | **Facade** | `frontend/.../facade/BancoPreguntasFacade.java` |
+| Comportamiento | **State** | `question-service/.../domain/state/` (Borrador, PendienteRevision, Aprobada, Rechazada, Eliminada) |
+| Comportamiento | **Observer** | `common/.../events/DomainEventBus.java` (observadores: log y `RabbitEventForwarder` hacia el broker); en el frontend, `Subject`/`Observer` para refrescar pantallas |
 
-La capa de acceso a datos ya **no falla en silencio**: si la base de datos
-no pudo abrirse o una consulta fallo (por ejemplo, si el jar se ejecuto sin
-el driver `sqlite-jdbc` empaquetado), aparece un cuadro de dialogo con el
-error real apenas arranca la aplicacion o al abrir "Mis preguntas" /
-"Asignar revisores", en vez de dejar la tabla vacia sin explicacion. Si ve
-ese dialogo, la causa mas probable es que el jar se genero/ejecuto sin las
-dependencias incluidas: use `mvn package` (no `mvn compile`) y ejecute el
-jar `-jar-with-dependencies.jar` indicado arriba, o `mvn compile exec:java`.
-El detalle completo de cualquier error tambien se imprime siempre en la
-consola.
+## Estado de los issues de Jira
 
-## API REST (Taller de Microservicios)
+Hechos: **PSP-14** y **PSP-15** (formulario `frontend/.../ui/CreateQuestionFrame.java`
+y reglas `common/.../contract/QuestionField.java`).
 
-La API es una **segunda capa de presentacion** (HTTP/JSON) sobre las mismas
-capas `service` / `microkernel` / `access`. No duplica logica: el
-`QuestionController` llama a `QuestionService`, que a su vez usa el
-microkernel (con su pipeline de filtros) y `SQLiteQuestionRepository`. Ambas
-aplicaciones comparten la base de datos `~/BancoPreguntasSaberPro/bancopreguntas.db`,
-asi que una pregunta creada desde Postman aparece en "Mis preguntas" del
-escritorio y viceversa.
+Lo pendiente esta marcado en el codigo con `TODO(PSP-xx)` y, en el API,
+responde **501 Not Implemented** con el issue. Para encontrarlos:
+`git grep -n "TODO(PSP-"`.
 
-```
-co.unicauca.saberpro.api
-├── BancoPreguntasApiApplication   @SpringBootApplication (main de la API)
-├── config/ApiConfig               Beans: repositorios, microkernel, servicios
-├── controller/                    QuestionController, UserController, PluginController
-├── dto/                           QuestionDTO (entrada), QuestionResponseDTO, ApiErrorDTO...
-└── exception/                     ApiExceptionHandler (@RestControllerAdvice), 400/404
-```
+| Issue | Que falta | Donde |
+|-------|-----------|-------|
+| PSP-16, PSP-17, PSP-18 | Caso de uso crear pregunta (fabrica + validacion + guardar + evento) | `QuestionApplicationService.create` |
+| PSP-19 | Pruebas de creacion | `question-service/src/test` |
+| PSP-20 | Estados: ya implementados con el patron State; falta usarlos en los casos de uso | `domain/state/` |
+| PSP-21 | Enviar a revision + evento | `QuestionApplicationService.submitForReview` |
+| PSP-22 | Colores por estado en la pantalla (`statusColor` ya viene en el API) | frontend, pantalla "Mis preguntas" |
+| PSP-24 a PSP-27 | Listado, busqueda, filtros y paginacion (el repositorio ya filtra y pagina) | `QuestionApplicationService.search` + pantalla |
+| PSP-28 | Edicion (el formulario ya soporta modo edicion) | `QuestionApplicationService.update` |
+| PSP-23, PSP-29 | Pruebas | `question-service/src/test` |
+| PSP-30 | Registrar/listar preguntas pendientes desde el evento | `ReviewApplicationService.registerPendingQuestion / listPendingQuestions` |
+| PSP-31 a PSP-33 | Asignar 1 a 3 revisores (`ReviewPolicy` ya valida) y persistir | `ReviewApplicationService.assignReviewers`, `InMemoryReviewRepository` |
+| PSP-34 | Correo a los revisores | `NotificationService.onReviewersAssigned` |
+| PSP-35 | Pruebas | `review-service/src/test` |
+| PSP-45 | Preguntas asignadas al revisor | `ReviewApplicationService.listAssignedTo` + pantalla |
+| PSP-46 | Detalle de la pregunta para el revisor (`GET /api/questions/{id}` ya funciona) | pantalla |
+| PSP-47 | Registrar evaluacion y observaciones | `ReviewApplicationService.evaluate / listEvaluations` |
+| PSP-48 | Aprobada/Rechazada al recibir el evento | `QuestionApplicationService.applyEvaluation` |
+| PSP-49 | Publicar `QuestionEvaluatedEvent` y notificar autor y administrador | `ReviewApplicationService.evaluate`, `NotificationService.onQuestionEvaluated` |
+| PSP-50 | Pruebas | `review-service`, `notification-service` |
 
-### Ejecutar la API
+En el frontend, `BancoPreguntasFacade` ya expone todas las operaciones; solo
+faltan las pantallas (ver los `TODO` en `MainFrame`).
 
-El proyecto tiene **dos puntos de entrada independientes**:
+## Pruebas
 
-| Clase | Que arranca |
-|-------|-------------|
-| `presentation/MainApp` | Aplicacion de escritorio (Swing) |
-| `api/BancoPreguntasApiApplication` | **API REST** en `http://localhost:8080` |
-
-Desde el IDE, ejecutar el `main` de `co.unicauca.saberpro.api.BancoPreguntasApiApplication`,
-o por consola `mvn spring-boot:run`. Funciona cuando la consola muestra
-`Started BancoPreguntasApiApplication`. Prueba rapida en el navegador:
-`http://localhost:8080/api/plugins`.
-
-### Endpoints
-
-| Metodo | Ruta | Descripcion | Respuesta |
-|--------|------|-------------|-----------|
-| GET | `/api/questions?author=&state=&topic=&keyword=&page=1&size=10` | Listar con filtros y paginacion (HU03) | 200 |
-| GET | `/api/questions/{id}` | Consultar una pregunta | 200 / 404 |
-| POST | `/api/questions` | Crear: pasa por el microkernel y el pipeline de filtros (HU01) | 201 / 400 |
-| PUT | `/api/questions/{id}` | Editar (solo el autor y en estado Borrador; se revalida con el pipeline) | 200 / 400 / 404 |
-| DELETE | `/api/questions/{id}` | Eliminacion logica (estado `ELIMINADA`) | 200 / 400 / 404 |
-| PATCH | `/api/questions/{id}/submit-review` | Enviar a revision (HU02). Body: `{"authorLogin":"autor1"}` | 200 / 400 |
-| PATCH | `/api/questions/{id}/reviewers` | Asignar revisores (HU04). Body: `{"reviewers":["rev1"]}` | 200 / 400 |
-| GET | `/api/users`, `/api/users/reviewers` | Usuarios (sin hash de contrasena) | 200 |
-| GET | `/api/plugins` | Plugins cargados por Reflexion | 200 |
-
-Ejemplo de body para POST/PUT:
-
-```json
-{
-  "type": "MULTIPLE_CHOICE",
-  "context": "Una empresa necesita que su banco de preguntas admita nuevos tipos...",
-  "directQuestion": "¿Que patron permite agregar funcionalidad mediante plugins?",
-  "distractors": ["Microkernel", "Cliente-Servidor", "Capas", "Broker"],
-  "correctAnswer": "Microkernel",
-  "justification": "El patron Microkernel separa un nucleo minimo de sus plugins.",
-  "bibliography": "Richards, M. Software Architecture Patterns. O'Reilly, 2015.",
-  "competence": "Arquitectura de software",
-  "topic": "Patrones arquitectonicos",
-  "subtopic": "Microkernel",
-  "difficultyLevel": "MEDIO",
-  "authorLogin": "autor1"
-}
-```
-
-En `postman/BancoPreguntas-API.postman_collection.json` hay una coleccion
-con las 13 peticiones en orden de demostracion (el `id` creado por el POST se
-guarda en la variable `questionId`). Si la extension de Postman para VS Code
-no la importa, se puede importar con Postman de escritorio o crear las
-peticiones a mano con los datos de la tabla anterior.
-
-### Decisiones de diseno
-
-- **Sin JPA sobre la entidad de dominio.** El taller advierte que anotar la
-  entidad de negocio con JPA rompe el SRP. Aqui `Question` sigue siendo un
-  POJO de dominio y la persistencia continua detras de `IQuestionRepository`
-  (DIP), por lo que la API no requirio cambiar la capa de acceso a datos.
-- **DTOs propios de la API** (`QuestionDTO`, `QuestionResponseDTO`): el JSON
-  no depende de la forma interna de las entidades.
-- **DELETE logico**: usa el estado `ELIMINADA` que ya existia en el ciclo de
-  vida del dominio, conservando trazabilidad.
-- **Metodos `synchronized` en los controladores**: el repositorio SQLite
-  comparte una unica conexion JDBC y Tomcat atiende en varios hilos.
-
-## Notificacion por correo (HU04)
-
-`SmtpEmailService` implementa un cliente SMTP escrito solo con clases del JDK
-(`java.net.Socket` y `javax.net.ssl`), sin dependencias externas. Soporta
-STARTTLS (puerto 587) y SSL (puerto 465), que es lo que exigen Gmail y
-Outlook.
-
-**Para enviar correos reales (por ejemplo con Gmail):**
-1. Copie `src/main/resources/mail.properties.example` como
-   `src/main/resources/mail.properties`.
-2. En su cuenta de Google active la verificacion en 2 pasos y cree una
-   *contrasena de aplicacion* en https://myaccount.google.com/apppasswords.
-3. Ponga su correo y esa contrasena de aplicacion en `mail.properties`.
-4. Registre (como admin) un revisor con un correo real y asignelo.
-
-`mail.properties` esta en `.gitignore`: la contrasena nunca se sube a GitHub.
-
-**Si ese archivo no existe** (configuracion por defecto) o el envio falla,
-cada notificacion se guarda como `.txt` en
-`~/BancoPreguntasSaberPro/outbox/`. En ambos casos, al asignar revisores el
-administrador ve un mensaje que indica, por cada revisor, si el correo se
-**envio** o se **simulo** (y donde quedo el archivo).
-
-## Pruebas unitarias
-
-`src/test/java` contiene 13 clases de prueba JUnit 5 que cubren todas las
-entidades y servicios del dominio:
-
-| Area | Clases de prueba |
-|------|------------------|
-| Entidades | `QuestionTest`, `UserTest`, `QuestionRequestTest`, `EnumsTest` |
-| Servicios | `QuestionServiceTest` (HU01-HU04 de punta a punta, mas editar/eliminar), `UserServiceTest`, `DefaultPasswordPolicyTest`, `PBKDF2PasswordHasherTest`, `SmtpEmailServiceTest`, `SupportClassesTest` |
-| Microkernel | `QuestionMicrokernelTest` (carga por reflexion), `QuestionPipelineTest` (cada filtro) |
-| Transversal | `SubjectTest` (patron Observer) |
-
-Ejecutar con `mvn test`, o desde la pestana *Testing* (icono del matraz) de
-VS Code. Las pruebas de servicios usan dobles en memoria
-(`testdoubles/InMemoryUserRepositoryFake`, `InMemoryQuestionRepositoryFake`)
-para no depender de SQLite.
-
-## Documentacion de arquitectura
-
-En `docs/` esta el material del documento de arquitectura del primer corte:
-
-- `docs/ARQUITECTURA.md`: historias de usuario con criterios de aceptacion,
-  test de usabilidad propuesto, atributos de calidad, escenario de
-  modificabilidad, patrones de diseno, principios SOLID y pruebas.
-- `docs/diagramas/`: diagramas C4 (contexto, contenedores, componentes) y de
-  clases UML, en PlantUML (`.puml`) y como imagen (`.png`).
-
-## Origen del codigo reutilizado
-
-- **GestionUsuariosSOLID**: `Role`, `User`, `IUserRepository`,
-  `SQLiteUserRepository`, `IPasswordPolicy`/`DefaultPasswordPolicy`,
-  `IPasswordHasher`/`PBKDF2PasswordHasher`, `UserService`, `OperationResult`.
-- **TallerCapasMVC**: patron `Observer`/`Subject`, idea de capas
-  `presentation/domain/access/infra` y la nocion de notificar vistas ante un
-  cambio de estado (usada aqui en `MyQuestionsFrame`).
-- **lisw2_t5_g4**: `QuestionMicrokernel` (con reflexion), `QuestionPlugin`,
-  `QuestionPipeline`/`QuestionFilter` y los 4 filtros de validacion
-  propuestos en el taller (mas un quinto filtro de metadatos agregado para
-  cubrir todos los campos de HU01).
+`mvn test` ejecuta 99 pruebas JUnit 5 en los 7 modulos (entidades, servicios,
+patrones, repositorios SQLite, cliente HTTP y fachada del frontend).
