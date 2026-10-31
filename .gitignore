@@ -1,12 +1,9 @@
 target/
+data/
+outbox/
+*.log
 .idea/
 *.iml
 .vscode/
-.settings/
-.classpath
-.project
-.factorypath
-nbproject/private/
 .DS_Store
-# Credenciales SMTP: nunca se suben a GitHub (ver mail.properties.example)
-notification-service/src/main/resources/mail.properties
+.env

@@ -1,0 +1,50 @@
+@startuml contextos-delimitados
+title Mapa de contextos delimitados - Iteración 2
+skinparam packageStyle rectangle
+skinparam shadowing false
+
+package "Identity & Access\n<<user-service>>" as IA #EDE7F6 {
+  class Usuario { id; login; nombre; correo; rol; estado }
+}
+
+package "Gestión de Preguntas + Ciclo de Vida + Validación\n<<question-service>>" as QM #E8F5E9 {
+  class Pregunta <<Aggregate Root>> { id; contexto; enunciado; justificación; bibliografía; competencia; tema; subtema; dificultad; estado }
+  class Opcion { texto; esCorrecta; orden }
+  class EstadoPregunta <<State>>
+  class ReglaValidacion <<Chain>>
+  Pregunta "1" *-- "4" Opcion
+  Pregunta --> EstadoPregunta
+  Pregunta ..> ReglaValidacion : se valida con
+}
+
+package "Revisión por Pares\n<<review-service>>" as PR #FFF8E1 {
+  class RevisionPregunta <<Aggregate Root>> { preguntaId; autor; estado; ronda }
+  class AsignacionRevisor { revisorLogin; estado; concepto }
+  class EvaluacionCriterio { criterio; calificación 1-5; comentario }
+  class Observacion { revisorLogin; texto; fecha }
+  class PoliticaDecision <<Strategy>>
+  RevisionPregunta "1" *-- "1..3" AsignacionRevisor
+  AsignacionRevisor "1" *-- "4" EvaluacionCriterio
+  RevisionPregunta "1" *-- "*" Observacion
+  RevisionPregunta ..> PoliticaDecision
+}
+
+package "Notificaciones (soporte)\n<<notification-service>>" as NT #E3F2FD {
+  class Notificacion { eventoId; destinatario; asunto; cuerpo; entrega; leída }
+}
+
+package "Futuras iteraciones" as FUT #F5F5F5 {
+  class "Simulacros (Assessment)" as S
+  class "Seguimiento Académico (Analytics)" as A
+  class "Auditoría y Trazabilidad" as AU
+}
+
+QM -[#2E7D32,bold]-> PR : question.submitted\n(Published Language)
+PR -[#F57F17,bold]-> QM : review.reviewers-assigned\nreview.completed
+QM -[#1565C0,dashed]-> NT : question.submitted
+PR -[#1565C0,dashed]-> NT : review.*
+PR ..> IA : Customer/Supplier\n(REST: roles)
+NT ..> IA : Customer/Supplier\n(REST: correos)
+QM ..> FUT : (futuro) preguntas aprobadas
+PR ..> FUT : (futuro) auditoría de eventos
+@enduml
