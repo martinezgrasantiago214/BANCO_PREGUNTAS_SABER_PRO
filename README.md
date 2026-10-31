@@ -40,6 +40,7 @@ flowchart LR
 | Módulo | Puerto | Responsabilidad |
 |--------|--------|-----------------|
 | `common-events` | — | Contratos de eventos (*Published Language*). Es Java puro, sin framework. |
+| `common-outbox` | — | *Transactional Outbox*: guarda los eventos en la misma transacción que el agregado y un *relay* los entrega a RabbitMQ con confirmación. Lo usan question-service y review-service. |
 | `discovery-server` | 8761 | Eureka: registro y descubrimiento de instancias. |
 | `api-gateway` | 8080 | Punto único de entrada, balanceo `lb://` y Swagger UI que agrupa las 4 APIs. |
 | `user-service` | 8081* | Contexto *Identity & Access*. |
@@ -126,9 +127,10 @@ Son pruebas unitarias del dominio y de los servicios de aplicación de cada micr
 
 | Módulo | Clases de prueba |
 |--------|------------------|
+| common-outbox | `OutboxIntegrationTest` (atomicidad, orden, caída del broker, backoff, health, purga) |
 | user-service | `UserTest`, `DefaultPasswordPolicyTest`, `UserServiceTest`, `Pbkdf2PasswordHasherTest` |
-| question-service | `QuestionTest`, `QuestionStateTest`, `QuestionValidationChainTest`, `QuestionPluginTest`, `QuestionServiceTest` |
-| review-service | `QuestionReviewTest`, `ReviewerAssignmentTest`, `ReviewValueObjectsTest`, `DecisionPolicyTest`, `ReviewServiceTest` |
+| question-service | `QuestionTest`, `QuestionStateTest`, `QuestionValidationChainTest`, `QuestionPluginTest`, `QuestionServiceTest`, `SubmitForReviewOutboxTest` |
+| review-service | `QuestionReviewTest`, `ReviewerAssignmentTest`, `ReviewValueObjectsTest`, `DecisionPolicyTest`, `ReviewServiceTest`, `ReviewOutboxTest` |
 | notification-service | `NotificationTest`, `NotificationTemplatesTest`, `NotificationServiceTest` |
 | frontend-desktop | `ClientLogicTest` |
 
@@ -154,6 +156,7 @@ La colección `postman/BancoPreguntas-Iteracion2.postman_collection.json` recorr
 
 ```
 ├── common-events/          eventos de integración compartidos
+├── common-outbox/          Transactional Outbox + relay (auto-configuración)
 ├── discovery-server/       Eureka
 ├── api-gateway/            Spring Cloud Gateway + Swagger
 ├── user-service/           ┐

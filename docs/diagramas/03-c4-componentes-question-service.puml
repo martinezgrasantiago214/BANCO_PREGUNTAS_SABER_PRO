@@ -16,7 +16,8 @@ Container_Boundary(qs, "question-service") {
   Component(repoPort, "QuestionRepositoryPort", "Puerto de salida")
   Component(pubPort, "QuestionEventPublisherPort", "Puerto de salida")
   Component(repoAdapter, "QuestionRepositoryAdapter", "JPA adapter (salida)", "Specifications para filtros y paginación")
-  Component(pubAdapter, "RabbitQuestionEventPublisher", "AMQP adapter (salida)")
+  Component(pubAdapter, "OutboxQuestionEventPublisher", "Outbox adapter (salida)", "Escribe el evento en la misma transacción que la pregunta")
+  Component(relay, "OutboxRelay", "common-outbox", "Entrega los pendientes con publisher confirms y backoff")
 }
 
 Rel(gateway, ctrl, "HTTP JSON")
@@ -32,4 +33,6 @@ Rel(repoAdapter, repoPort, "implementa")
 Rel(pubAdapter, pubPort, "implementa")
 Rel(repoAdapter, db, "JPA")
 Rel(pubAdapter, broker, "question.submitted")
+Rel(relay, db, "lee outbox_message (FOR UPDATE SKIP LOCKED)")
+Rel(relay, broker, "question.submitted")
 @enduml

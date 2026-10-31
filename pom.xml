@@ -20,6 +20,7 @@
 
     <modules>
         <module>common-events</module>
+        <module>common-outbox</module>
         <module>discovery-server</module>
         <module>api-gateway</module>
         <module>user-service</module>
@@ -47,6 +48,11 @@
             <dependency>
                 <groupId>co.unicauca.saberpro</groupId>
                 <artifactId>common-events</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>co.unicauca.saberpro</groupId>
+                <artifactId>common-outbox</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

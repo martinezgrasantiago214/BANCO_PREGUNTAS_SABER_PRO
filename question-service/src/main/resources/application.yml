@@ -17,6 +17,8 @@ spring:
     port: 5672
     username: ${RABBIT_USER:guest}
     password: ${RABBIT_PASSWORD:guest}
+    # El outbox relay solo marca un evento como publicado cuando el broker lo confirma.
+    publisher-confirm-type: correlated
     listener:
       simple:
         concurrency: 2
@@ -35,11 +37,21 @@ eureka:
   instance:
     prefer-ip-address: true
 
+saberpro:
+  outbox:
+    poll-interval: ${OUTBOX_POLL_INTERVAL:500ms}
+    batch-size: 50
+    retention: 7d
+    max-pending-age: 2m
+
 management:
   endpoints:
     web:
       exposure:
         include: health,info
+  endpoint:
+    health:
+      show-details: always
 
 ---
 spring:

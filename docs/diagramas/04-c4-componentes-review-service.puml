@@ -16,7 +16,8 @@ Container_Boundary(rs, "review-service") {
   Component(userPort, "UserDirectoryPort", "Puerto")
   Component(userAdapter, "UserDirectoryRestAdapter", "RestClient @LoadBalanced")
   Component(repoAdapter, "ReviewRepositoryAdapter", "JPA + bloqueo optimista")
-  Component(pubAdapter, "RabbitReviewEventPublisher", "AMQP")
+  Component(pubAdapter, "OutboxReviewEventPublisher", "Outbox adapter", "Escribe los eventos en la misma transacción que la revisión")
+  Component(relay, "OutboxRelay", "common-outbox", "Entrega los pendientes con publisher confirms y backoff")
 }
 
 Rel(gateway, ctrl, "HTTP JSON")
@@ -31,5 +32,7 @@ Rel(userAdapter, users, "GET /api/users/{login}")
 Rel(service, repoAdapter, "vía puerto")
 Rel(repoAdapter, db, "JPA")
 Rel(service, pubAdapter, "vía puerto")
-Rel(pubAdapter, broker, "review.reviewers-assigned, review.evaluation-submitted, review.observation-added, review.completed")
+Rel(pubAdapter, db, "outbox_message")
+Rel(relay, db, "lee pendientes (FOR UPDATE SKIP LOCKED)")
+Rel(relay, broker, "review.reviewers-assigned, review.evaluation-submitted, review.observation-added, review.completed")
 @enduml
