@@ -8,6 +8,7 @@ import co.unicauca.saberpro.service.OperationResult;
 
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
+import javax.swing.border.TitledBorder;
 import java.awt.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -16,6 +17,11 @@ import java.util.List;
  * Formulario para que un autor cree una pregunta de seleccion multiple con
  * unica respuesta (HU01). Al guardar, el sistema valida automaticamente que la
  * informacion este completa y sea consistente (ver microkernel/pipeline).
+ *
+ * Los campos se agrupan en cuatro secciones que siguen el orden del Diseno
+ * Centrado en Evidencia: Enunciado, Opciones de respuesta, Sustento y
+ * Clasificacion. Los botones de accion quedan en una barra fija inferior
+ * para que siempre esten visibles aunque el formulario requiera scroll.
  *
  * El mismo formulario se reutiliza en modo EDICION (HU03: "listar las
  * preguntas que he creado para poder mas adelante verlas y editarlas"): se
@@ -28,11 +34,11 @@ public class CreateQuestionFrame extends JFrame {
     /** Pregunta que se esta editando, o null si se esta creando una nueva. */
     private final Question editing;
 
-    private final JTextArea txtContext = new JTextArea(3, 30);
+    private final JTextArea txtContext = new JTextArea(4, 30);
     private final JTextArea txtDirectQuestion = new JTextArea(2, 30);
     private final JTextField[] txtDistractors = new JTextField[4];
     private final JComboBox<String> cmbCorrectAnswer = new JComboBox<>();
-    private final JTextArea txtJustification = new JTextArea(2, 30);
+    private final JTextArea txtJustification = new JTextArea(3, 30);
     private final JTextField txtBibliography = new JTextField(30);
     private final JTextField txtCompetence = new JTextField(30);
     private final JTextField txtTopic = new JTextField(30);
@@ -77,7 +83,8 @@ public class CreateQuestionFrame extends JFrame {
 
     private void buildUi() {
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(650, 760);
+        setSize(700, 780);
+        setMinimumSize(new Dimension(560, 520));
         setLocationRelativeTo(null);
 
         JPanel root = new JPanel(new BorderLayout());
@@ -86,41 +93,98 @@ public class CreateQuestionFrame extends JFrame {
 
         JPanel form = new JPanel();
         form.setLayout(new BoxLayout(form, BoxLayout.Y_AXIS));
-        form.setBorder(new EmptyBorder(16, 16, 16, 16));
+        form.setBorder(new EmptyBorder(12, 16, 12, 16));
         UiTheme.applyBackground(form);
 
-        form.add(labeled("Contexto:", scroll(txtContext)));
-        form.add(labeled("Pregunta directa:", scroll(txtDirectQuestion)));
+        JLabel requiredHint = new JLabel("Los campos marcados con * son obligatorios.");
+        requiredHint.setForeground(UiTheme.TEXT);
+        JPanel hintPanel = new JPanel(new BorderLayout());
+        hintPanel.setOpaque(false);
+        hintPanel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        hintPanel.add(requiredHint, BorderLayout.CENTER);
+        form.add(hintPanel);
+        form.add(Box.createVerticalStrut(8));
 
+        JPanel statement = section("1. Enunciado");
+        statement.add(labeled(required("Contexto"), scroll(txtContext),
+                "Situacion o caso que da sentido a la pregunta."));
+        statement.add(labeled(required("Pregunta directa"), scroll(txtDirectQuestion),
+                "Enunciado que el estudiante debe responder."));
+        addSection(form, statement);
+
+        JPanel options = section("2. Opciones de respuesta");
         JPanel distractorsPanel = new JPanel(new GridLayout(4, 1, 4, 4));
-        distractorsPanel.setBorder(BorderFactory.createTitledBorder("Cuatro distractores (una debe ser la correcta)"));
+        distractorsPanel.setOpaque(false);
         for (int i = 0; i < 4; i++) {
             txtDistractors[i] = new JTextField();
-            final int idx = i;
             txtDistractors[i].getDocument().addDocumentListener(new SimpleDocListener(this::refreshCorrectAnswerOptions));
-            distractorsPanel.add(labeledInline("Opcion " + (char) ('A' + idx) + ":", txtDistractors[i]));
+            distractorsPanel.add(labeledInline(required("Opcion " + (char) ('A' + i)), txtDistractors[i]));
         }
-        form.add(distractorsPanel);
-        form.add(Box.createVerticalStrut(6));
+        options.add(labeled("Cuatro distractores (uno de ellos debe ser la respuesta correcta):",
+                distractorsPanel, null));
+        options.add(labeled(required("Respuesta correcta"), cmbCorrectAnswer,
+                "Se elige entre las opciones escritas arriba."));
+        addSection(form, options);
 
-        form.add(labeled("Respuesta correcta:", cmbCorrectAnswer));
-        form.add(labeled("Justificacion de la respuesta:", scroll(txtJustification)));
-        form.add(labeled("Bibliografia:", txtBibliography));
-        form.add(labeled("Competencia (ej. Arquitectura de software):", txtCompetence));
-        form.add(labeled("Tema:", txtTopic));
-        form.add(labeled("Subtema:", txtSubtopic));
-        form.add(labeled("Nivel de dificultad:", cmbDifficulty));
+        JPanel support = section("3. Sustento");
+        support.add(labeled(required("Justificacion de la respuesta"), scroll(txtJustification),
+                "Explique por que la respuesta correcta lo es y por que las demas no."));
+        support.add(labeled(required("Bibliografia"), txtBibliography,
+                "Fuente que respalda la respuesta."));
+        addSection(form, support);
+
+        JPanel classification = section("4. Clasificacion");
+        classification.add(labeled(required("Competencia"), txtCompetence,
+                "Ej. Arquitectura de software."));
+        classification.add(labeled(required("Tema"), txtTopic, null));
+        classification.add(labeled(required("Subtema"), txtSubtopic, null));
+        classification.add(labeled(required("Nivel de dificultad"), cmbDifficulty, null));
+        addSection(form, classification);
+
+        JScrollPane formScroll = new JScrollPane(form);
+        formScroll.setBorder(BorderFactory.createEmptyBorder());
+        formScroll.getVerticalScrollBar().setUnitIncrement(16);
+        root.add(formScroll, BorderLayout.CENTER);
+        root.add(buildButtonBar(), BorderLayout.SOUTH);
+        setContentPane(root);
+    }
+
+    /** Barra inferior fija (fuera del scroll) para que Guardar siempre este a la vista. */
+    private JPanel buildButtonBar() {
+        JPanel bar = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
+        UiTheme.applyBackground(bar);
+        bar.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, UiTheme.PRIMARY));
+
+        JButton btnCancel = UiTheme.secondaryButton("Cancelar");
+        btnCancel.addActionListener(e -> dispose());
+        bar.add(btnCancel);
+
+        if (editing == null) {
+            JButton btnClear = UiTheme.secondaryButton("Limpiar");
+            btnClear.addActionListener(e -> clearForm());
+            bar.add(btnClear);
+        }
 
         JButton btnSave = UiTheme.primaryButton(editing == null ? "Guardar pregunta" : "Guardar cambios");
         btnSave.addActionListener(e -> onSave());
-        JPanel buttonsPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
-        UiTheme.applyBackground(buttonsPanel);
-        buttonsPanel.add(btnSave);
-        form.add(Box.createVerticalStrut(10));
-        form.add(buttonsPanel);
+        bar.add(btnSave);
+        return bar;
+    }
 
-        root.add(new JScrollPane(form), BorderLayout.CENTER);
-        setContentPane(root);
+    /** Deja el formulario vacio para empezar otra pregunta (solo en modo creacion). */
+    private void clearForm() {
+        txtContext.setText("");
+        txtDirectQuestion.setText("");
+        for (JTextField field : txtDistractors) {
+            field.setText("");
+        }
+        txtJustification.setText("");
+        txtBibliography.setText("");
+        txtCompetence.setText("");
+        txtTopic.setText("");
+        txtSubtopic.setText("");
+        cmbDifficulty.setSelectedIndex(0);
+        txtContext.requestFocusInWindow();
     }
 
     private void refreshCorrectAnswerOptions() {
@@ -175,18 +239,53 @@ public class CreateQuestionFrame extends JFrame {
         }
     }
 
-    private JPanel labeled(String label, JComponent component) {
+    /** Bloque con titulo que agrupa campos relacionados del formulario. */
+    private JPanel section(String title) {
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        panel.setOpaque(false);
+        panel.setAlignmentX(Component.LEFT_ALIGNMENT);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createTitledBorder(BorderFactory.createLineBorder(UiTheme.PRIMARY), title,
+                        TitledBorder.LEFT, TitledBorder.TOP, null, UiTheme.PRIMARY),
+                new EmptyBorder(4, 8, 8, 8)));
+        return panel;
+    }
+
+    private void addSection(JPanel form, JPanel section) {
+        form.add(section);
+        form.add(Box.createVerticalStrut(10));
+    }
+
+    private static String required(String label) {
+        return label + " *";
+    }
+
+    private JPanel labeled(String label, JComponent component, String help) {
         JPanel panel = new JPanel(new BorderLayout(4, 2));
+        panel.setOpaque(false);
         panel.setBorder(new EmptyBorder(4, 0, 4, 0));
-        panel.add(new JLabel(label), BorderLayout.NORTH);
+        JLabel title = new JLabel(label);
+        title.setForeground(UiTheme.TEXT);
+        panel.add(title, BorderLayout.NORTH);
         panel.add(component, BorderLayout.CENTER);
+        if (help != null) {
+            JLabel helpLabel = new JLabel(help);
+            helpLabel.setFont(helpLabel.getFont().deriveFont(Font.ITALIC, 11f));
+            helpLabel.setForeground(Color.GRAY);
+            panel.add(helpLabel, BorderLayout.SOUTH);
+            component.setToolTipText(help);
+        }
         panel.setAlignmentX(Component.LEFT_ALIGNMENT);
         return panel;
     }
 
     private JPanel labeledInline(String label, JComponent component) {
-        JPanel panel = new JPanel(new BorderLayout(4, 2));
-        panel.add(new JLabel(label), BorderLayout.WEST);
+        JPanel panel = new JPanel(new BorderLayout(6, 2));
+        panel.setOpaque(false);
+        JLabel title = new JLabel(label);
+        title.setPreferredSize(new Dimension(80, title.getPreferredSize().height));
+        panel.add(title, BorderLayout.WEST);
         panel.add(component, BorderLayout.CENTER);
         return panel;
     }
