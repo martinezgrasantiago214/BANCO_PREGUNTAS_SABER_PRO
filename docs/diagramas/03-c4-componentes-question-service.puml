@@ -1,0 +1,32 @@
+@startuml c4-componentes-question
+!include <C4/C4_Component>
+LAYOUT_TOP_DOWN()
+title C4 nivel 3 - Componentes de question-service
+
+Container_Ext(gateway, "API Gateway", "Spring Cloud Gateway")
+ContainerQueue_Ext(broker, "RabbitMQ", "saberpro.events")
+ContainerDb_Ext(db, "question-service.db", "SQLite")
+
+Container_Boundary(qs, "question-service") {
+  Component(ctrl, "QuestionController", "REST (web)", "POST/GET/PUT /api/questions, PATCH /{id}/submit-review. Errores -> 400/403/404/409.")
+  Component(consumer, "QuestionEventsConsumer", "AMQP (messaging)", "Consume review.evaluated (HU05). Idempotente.")
+  Component(app, "QuestionApplicationService", "Aplicacion", "Casos de uso: create (HU01), submitForReview (HU02), search/update (HU03), applyEvaluation (HU05). No depende de Spring.")
+  Component(registry, "QuestionFactoryRegistry + QuestionFactory", "Dominio - Factory Method", "Una fabrica por tipo (seleccion multiple, caso, multimedia), cargadas por reflexion.")
+  Component(pipeline, "QuestionPipeline + 5 filtros", "Dominio - Tuberias y Filtros", "Validacion estructural; reporta todos los errores juntos.")
+  Component(question, "Question (agregado)", "Dominio - Builder + State", "Ciclo de vida delegado en QuestionState: Borrador, Pendiente, Aprobada, Rechazada, Eliminada.")
+  Component(repo, "IQuestionRepository / SQLiteQuestionRepository", "Acceso a datos", "Guarda, busca con filtros y pagina en SQL.")
+  Component(bus, "DomainEventBus", "common - Observer", "Observadores: EventLogListener y RabbitEventForwarder.")
+}
+
+Rel(gateway, ctrl, "JSON/HTTP")
+Rel(broker, consumer, "review.evaluated")
+Rel(ctrl, app, "usa")
+Rel(consumer, app, "usa")
+Rel(app, registry, "elige la fabrica del tipo")
+Rel(registry, pipeline, "valida con")
+Rel(registry, question, "construye con el Builder")
+Rel(app, repo, "usa (DIP)")
+Rel(repo, db, "JDBC")
+Rel(app, bus, "publica question.created / question.submitted")
+Rel(bus, broker, "reenvia", "AMQP")
+@enduml

@@ -1,0 +1,23 @@
+@startuml c4-contexto
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Context.puml
+LAYOUT_TOP_DOWN()
+title Diagrama de Contexto (C4 nivel 1) - Banco de Preguntas Saber PRO
+
+Enterprise_Boundary(unicauca, "Universidad del Cauca - Programa de Ingenieria de Sistemas") {
+  Person(autor, "Autor de preguntas", "Docente que crea preguntas de seleccion multiple para preparar a los estudiantes en las pruebas Saber Pro y las envia a revision.")
+  Person(admin, "Administrador", "Docente que gestiona los usuarios y asigna revisores a las preguntas pendientes de revision.")
+  Person(revisor, "Revisor", "Docente que recibe por correo las preguntas que se le asignan para revisar.")
+  System(banco, "Banco de Preguntas Saber PRO", "Permite crear, validar, listar y enviar a revision preguntas del banco Saber Pro, y asignar revisores notificandolos por correo.")
+}
+
+System_Ext(correo, "Servidor de correo", "Servicio SMTP existente (por ejemplo Gmail) que entrega los correos a los docentes.")
+System_Ext(cliente, "Aplicacion cliente HTTP", "Otro programa (Postman hoy; una web o app movil a futuro) que usa el banco de preguntas a traves de su API REST.")
+
+Rel(autor, banco, "Crea, lista, edita y envia a revision sus preguntas")
+Rel(admin, banco, "Asigna revisores a preguntas pendientes y registra usuarios")
+Rel(cliente, banco, "Consulta y gestiona preguntas por la API REST")
+Rel(banco, correo, "Envia correos de asignacion usando")
+Rel(correo, revisor, "Envia correos a")
+
+SHOW_LEGEND()
+@enduml

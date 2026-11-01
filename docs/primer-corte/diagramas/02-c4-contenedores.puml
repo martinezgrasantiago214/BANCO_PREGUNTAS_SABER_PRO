@@ -1,0 +1,31 @@
+@startuml c4-contenedores
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+LAYOUT_TOP_DOWN()
+title Diagrama de Contenedores (C4 nivel 2) - Banco de Preguntas Saber PRO
+
+Enterprise_Boundary(unicauca, "Universidad del Cauca - Programa de Ingenieria de Sistemas") {
+Person(autor, "Autor de preguntas", "Docente que crea preguntas de seleccion multiple y las envia a revision.")
+Person(admin, "Administrador", "Docente que gestiona usuarios y asigna revisores a preguntas pendientes.")
+Person(revisor, "Revisor", "Docente que recibe por correo las preguntas que se le asignan.")
+
+System_Boundary(banco, "Banco de Preguntas Saber PRO") {
+  Container(desktop, "Aplicacion de escritorio", "Java 17, Swing", "Monolito en capas con MVC + Observer. Implementa HU01-HU04: crea y valida preguntas con el microkernel, lista con filtros y paginacion, cambia estados y asigna revisores.")
+  Container(api, "API REST", "Java 17, Spring Boot", "Expone por HTTP/JSON las mismas operaciones del banco reutilizando las capas de servicio, microkernel y acceso a datos.")
+  ContainerDb(db, "Base de datos", "SQLite (archivo bancopreguntas.db)", "Guarda usuarios (con contrasena cifrada) y preguntas con su estado y revisores asignados.")
+}
+}
+
+System_Ext(cliente, "Aplicacion cliente HTTP", "Otro programa (Postman hoy; una web o app movil a futuro) que usa el banco de preguntas a traves de su API REST.")
+System_Ext(correo, "Servidor de correo", "Servicio SMTP existente (por ejemplo Gmail) que entrega los correos a los docentes.")
+
+Rel(autor, desktop, "Crea, lista, edita y envia a revision sus preguntas")
+Rel(admin, desktop, "Asigna revisores y registra usuarios")
+Rel(cliente, api, "Consulta y gestiona preguntas", "JSON/HTTP")
+Rel(desktop, db, "Lee y escribe usuarios y preguntas", "JDBC")
+Rel(api, db, "Lee y escribe usuarios y preguntas", "JDBC")
+Rel(desktop, correo, "Envia correos de asignacion usando", "SMTP/STARTTLS")
+Rel(api, correo, "Envia correos de asignacion usando", "SMTP/STARTTLS")
+Rel(correo, revisor, "Envia correos a")
+
+SHOW_LEGEND()
+@enduml

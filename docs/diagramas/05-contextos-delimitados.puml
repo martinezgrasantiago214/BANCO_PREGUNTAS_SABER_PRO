@@ -1,0 +1,29 @@
+@startuml contextos-delimitados
+!pragma layout smetana
+title Diagrama de contextos delimitados (bounded contexts) - segundo corte
+
+skinparam rectangle {
+  RoundCorner 18
+  BorderColor #1D4E6E
+}
+skinparam packageStyle rectangle
+
+rectangle "Gestion de Usuarios\n(Identity & Access)\n----\nuser-service\nUsuario, Rol, Estado\nlogin, registro" as U #E3F2FD
+rectangle "Gestion de Preguntas\n+ Validacion de Preguntas\n+ Ciclo de Vida\n----\nquestion-service\nPregunta (Builder), Fabricas por tipo,\nPipeline de validacion, Estados (State)" as Q #FFF8E1
+rectangle "Revision por Pares\n----\nreview-service\nPreguntaPendiente (proyeccion),\nAsignacion, Evaluacion" as R #E8F5E9
+rectangle "Notificaciones\n(contexto de soporte, nuevo)\n----\nnotification-service\nNotificacion, Destinatario, Canal" as N #F3E5F5
+rectangle "Simulacros\nSeguimiento Academico\nAdministracion\nTrazabilidad\n----\niteraciones futuras" as F #EEEEEE
+
+Q -right-> R : question.submitted\n(evento)
+R -left-> Q : review.evaluated\n(evento)
+R -down-> N : review.assigned,\nreview.evaluated\n(eventos)
+R -up-> U : consulta roles\n(REST, cliente/proveedor)
+N -up-> U : consulta correos\n(REST, cliente/proveedor)
+Q .down.> F : question.created\n(disponible para\nsuscriptores futuros)
+
+note bottom of Q
+  Contratos compartidos (Published Language):
+  modulo common -> eventos y enums del API.
+  Ningun servicio lee la base de datos de otro.
+end note
+@enduml
