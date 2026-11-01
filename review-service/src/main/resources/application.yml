@@ -10,6 +10,12 @@ spring:
     username: ${RABBITMQ_USER:guest}
     password: ${RABBITMQ_PASSWORD:guest}
 
+saberpro:
+  # Base de datos propia del servicio (SQLite): pendientes, asignaciones y evaluaciones.
+  data-dir: ${SABERPRO_DATA_DIR:${user.home}/BancoPreguntasSaberPro}
+  # El review-service consulta el rol de cada revisor en el user-service (HU04).
+  user-service-url: ${USER_SERVICE_URL:http://localhost:8081}
+
 springdoc:
   api-docs:
     path: /v3/api-docs
