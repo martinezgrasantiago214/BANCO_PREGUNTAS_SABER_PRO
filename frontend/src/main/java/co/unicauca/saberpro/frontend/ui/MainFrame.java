@@ -57,10 +57,10 @@ public class MainFrame extends JFrame {
             panel.add(centered(UiTheme.primaryButton("Crear pregunta"),
                     e -> new CreateQuestionFrame(context).setVisible(true)));
             panel.add(Box.createVerticalStrut(12));
-            // TODO(PSP-22, PSP-24..28): pantalla "Mis preguntas" (listado con colores, filtros, paginacion,
-            //  enviar a revision y editar) usando facade.searchMyQuestions / submitForReview / updateQuestion.
+            // HU03 (PSP-24..28): listado con colores, busqueda, filtros, paginacion y edicion.
+            // TODO(PSP-22): agregar en MyQuestionsFrame el boton "Enviar a revision" (HU02).
             panel.add(centered(UiTheme.primaryButton("Mis preguntas"),
-                    e -> Dialogs.showPendingScreen(this, "Mis preguntas", "PSP-22, PSP-24 a PSP-28")));
+                    e -> new MyQuestionsFrame(context).setVisible(true)));
         } else if (role == Role.ADMINISTRADOR) {
             // TODO(PSP-30..32): pantalla "Asignar revisores" usando facade.listPendingQuestions,
             //  listReviewers y assignReviewers.

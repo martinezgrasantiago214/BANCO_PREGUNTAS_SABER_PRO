@@ -40,11 +40,22 @@ public abstract class QuestionFactory {
      * @throws QuestionValidationException si la solicitud no supera la validacion.
      */
     public final Question create(QuestionRequest request) {
+        validate(request);
+        return createQuestion(request);
+    }
+
+    /**
+     * Aplica la validacion estructural de este tipo sin construir la pregunta.
+     * La usa la edicion (HU03): los datos nuevos pasan por las mismas reglas
+     * que al crear, pero la pregunta conserva su identidad.
+     *
+     * @throws QuestionValidationException si la solicitud no supera la validacion.
+     */
+    public final void validate(QuestionRequest request) {
         QuestionPipeline pipeline = createValidationPipeline();
         if (!pipeline.execute(request)) {
             throw new QuestionValidationException(pipeline.getLastError());
         }
-        return createQuestion(request);
     }
 
     /** Builder ya cargado con los datos del autor y el tipo de esta fabrica. */
