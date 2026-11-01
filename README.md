@@ -88,6 +88,12 @@ Hechos:
 
 - **PSP-14** y **PSP-15**: formulario `frontend/.../ui/CreateQuestionFrame.java`
   y reglas `common/.../contract/QuestionField.java`.
+- **PSP-8 (HU02), subtareas PSP-20 a PSP-23**: el autor envia su pregunta de Borrador a
+  Pendiente de revision con el boton "Enviar a revision" de "Mis preguntas".
+  `QuestionApplicationService.submitForReview` valida el autor (403), el patron State decide
+  la transicion (una no permitida responde **409**) y se publica `question.submitted`, que el
+  review-service consume para listar la pregunta como pendiente de asignar (HU04). Cada estado
+  se ve con su color y hay una leyenda. Pruebas en `SubmitForReviewTest` y `QuestionControllerHu02Test`.
 - **PSP-6 (HU01), subtareas PSP-16 a PSP-19**: crear preguntas. `QuestionApplicationService.create`
   normaliza los datos, elige la fabrica del tipo (Factory Method), aplica la validacion
   estructural completa y responde **400 con todos los errores juntos** (`QuestionPipeline.validateAll`),
@@ -110,8 +116,8 @@ Hechos:
     revision; **el primer revisor asignado que evalua decide el estado** y despues
     la pregunta no admite mas evaluaciones; al rechazar, las observaciones son
     obligatorias (maximo 2000 caracteres).
-  - Para probarla de punta a punta hacen falta HU02 (PSP-21, enviar a revision)
-    y HU04 (PSP-30 a PSP-33, registrar la pregunta pendiente y asignar revisores).
+  - Para probarla de punta a punta: crear la pregunta (HU01), enviarla a revision (HU02)
+    y asignarle revisores (HU04).
 
 Lo pendiente esta marcado en el codigo con `TODO(PSP-xx)` y, en el API,
 responde **501 Not Implemented** con el issue. Para encontrarlos:
@@ -119,10 +125,6 @@ responde **501 Not Implemented** con el issue. Para encontrarlos:
 
 | Issue | Que falta | Donde |
 |-------|-----------|-------|
-| PSP-20 | Estados: ya implementados con el patron State; falta usarlos en los casos de uso | `domain/state/` |
-| PSP-21 | Enviar a revision + evento | `QuestionApplicationService.submitForReview` |
-| PSP-22 | Boton "Enviar a revision" (los colores por estado y su leyenda ya se ven en "Mis preguntas") | `MyQuestionsFrame` |
-| PSP-23 | Pruebas de HU02 | `question-service/src/test` |
 | PSP-30 | Registrar/listar preguntas pendientes desde el evento | `ReviewApplicationService.registerPendingQuestion / listPendingQuestions` |
 | PSP-31 a PSP-33 | Asignar 1 a 3 revisores (`ReviewPolicy` ya valida) y persistir | `ReviewApplicationService.assignReviewers`, `InMemoryReviewRepository` |
 | PSP-34 | Correo a los revisores | `NotificationService.onReviewersAssigned` |
