@@ -50,6 +50,9 @@ import java.util.List;
  *   <li>PSP-26 filtros: estado y tema.</li>
  *   <li>PSP-27 paginacion: anterior/siguiente y tamano de pagina.</li>
  *   <li>PSP-28 edicion: abre {@link CreateQuestionFrame} en modo edicion.</li>
+ *   <li>HU02 (PSP-21, PSP-22): "Enviar a revision" pasa un Borrador a
+ *       Pendiente de revision; cada estado se ve con su color y hay una
+ *       leyenda.</li>
  * </ul>
  *
  * Toda la comunicacion pasa por la fachada (BancoPreguntasFacade), que llama
@@ -84,6 +87,7 @@ public class MyQuestionsFrame extends JFrame implements Observer {
     private final JButton btnNext = UiTheme.secondaryButton("Siguiente >");
     private final JButton btnDetail = UiTheme.secondaryButton("Ver detalle");
     private final JButton btnEdit = UiTheme.primaryButton("Editar");
+    private final JButton btnSubmit = UiTheme.primaryButton("Enviar a revision");
     /** Evita que limpiar los campos dispare una busqueda por cada campo que se borra. */
     private boolean resettingFilters;
 
@@ -260,9 +264,10 @@ public class MyQuestionsFrame extends JFrame implements Observer {
         btnEdit.addActionListener(e -> editSelected());
         JButton btnClose = UiTheme.secondaryButton("Cerrar");
         btnClose.addActionListener(e -> dispose());
-        // TODO(PSP-22): boton "Enviar a revision" con facade.submitForReview (HU02).
+        btnSubmit.addActionListener(e -> submitSelected());
         actions.add(btnDetail);
         actions.add(btnEdit);
+        actions.add(btnSubmit);
         actions.add(btnClose);
         footer.add(actions, BorderLayout.SOUTH);
         return footer;
@@ -347,6 +352,42 @@ public class MyQuestionsFrame extends JFrame implements Observer {
         btnEdit.setToolTipText(q == null ? "Seleccione una pregunta."
                 : q.editable() ? "Editar la pregunta seleccionada."
                 : "Solo se pueden editar preguntas en Borrador (esta en " + q.statusLabel() + ").");
+        boolean draft = q != null && q.status() == QuestionStatus.BORRADOR;
+        btnSubmit.setEnabled(draft);
+        btnSubmit.setToolTipText(q == null ? "Seleccione una pregunta."
+                : draft ? "Pasar la pregunta de Borrador a Pendiente de revision."
+                : "Solo se envian a revision las preguntas en Borrador (esta en " + q.statusLabel() + ").");
+    }
+
+    /**
+     * HU02 (PSP-21): envia la pregunta seleccionada a revision. El backend
+     * valida que el usuario sea el autor y que la pregunta este en Borrador
+     * (patron State). Al terminar, la fachada avisa a los observadores y la
+     * tabla se refresca con el nuevo estado y su color.
+     */
+    private void submitSelected() {
+        QuestionView q = selectedQuestion();
+        if (q == null || q.status() != QuestionStatus.BORRADOR) {
+            return;
+        }
+        int answer = JOptionPane.showConfirmDialog(this,
+                "¿Enviar a revision la pregunta?\n\n\"" + q.directQuestion() + "\"\n\n"
+                        + "Pasara a \"Pendiente de revision\" y ya no se podra editar.",
+                "Enviar a revision", JOptionPane.OK_CANCEL_OPTION, JOptionPane.QUESTION_MESSAGE);
+        if (answer != JOptionPane.OK_OPTION) {
+            return;
+        }
+        QuestionView updated;
+        try {
+            updated = context.getFacade().submitForReview(q.id());
+        } catch (ApiException ex) {
+            Dialogs.showApiError(this, ex, "No fue posible enviar la pregunta a revision");
+            loadPage();
+            return;
+        }
+        JOptionPane.showMessageDialog(this, "La pregunta quedo en estado \"" + updated.statusLabel()
+                + "\". El administrador ya puede asignarle revisores.", "Enviada a revision",
+                JOptionPane.INFORMATION_MESSAGE);
     }
 
     /** PSP-28: abre el formulario de HU01 en modo edicion con la version mas reciente de la pregunta. */
