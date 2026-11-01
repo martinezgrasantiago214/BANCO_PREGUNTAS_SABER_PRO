@@ -4,61 +4,24 @@ server:
 spring:
   application:
     name: question-service
-  datasource:
-    url: jdbc:h2:file:./data/questions-db;AUTO_SERVER=TRUE
-    username: sa
-    password:
-  jpa:
-    hibernate:
-      ddl-auto: update
-    open-in-view: false
   rabbitmq:
-    host: ${RABBIT_HOST:localhost}
-    port: 5672
-    username: ${RABBIT_USER:guest}
-    password: ${RABBIT_PASSWORD:guest}
-    # El outbox relay solo marca un evento como publicado cuando el broker lo confirma.
-    publisher-confirm-type: correlated
-    listener:
-      simple:
-        concurrency: 2
-        max-concurrency: 8
-        prefetch: 10
-        default-requeue-rejected: false
-        retry:
-          enabled: true
-          max-attempts: 3
-          initial-interval: 1s
-
-eureka:
-  client:
-    service-url:
-      defaultZone: ${EUREKA_URL:http://localhost:8761/eureka}
-  instance:
-    prefer-ip-address: true
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
 
 saberpro:
-  outbox:
-    poll-interval: ${OUTBOX_POLL_INTERVAL:500ms}
-    batch-size: 50
-    retention: 7d
-    max-pending-age: 2m
+  # Base de datos propia del servicio (SQLite).
+  data-dir: ${SABERPRO_DATA_DIR:${user.home}/BancoPreguntasSaberPro}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
 
 management:
   endpoints:
     web:
       exposure:
         include: health,info
-  endpoint:
-    health:
-      show-details: always
-
----
-spring:
-  config:
-    activate:
-      on-profile: docker
-  datasource:
-    url: jdbc:postgresql://postgres:5432/questions_db
-    username: saberpro
-    password: saberpro

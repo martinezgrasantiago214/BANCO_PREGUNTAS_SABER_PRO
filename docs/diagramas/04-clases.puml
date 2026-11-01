@@ -1,0 +1,110 @@
+@startuml clases
+title Diagrama de clases - Microkernel + Tuberias y Filtros, y Servicio con Observer
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+package "Componente: Microkernel y Pipeline" {
+  class QuestionMicrokernel {
+    - plugins : List<QuestionPlugin>
+    - questions : Map<String, Question>
+    + executePlugin(type : String, req : QuestionRequest) : Question
+    - loadPlugins() : void
+  }
+  interface QuestionPlugin {
+    + getName() : String
+    + supports(type : String) : boolean
+    + generate(req : QuestionRequest) : Question
+  }
+  class MultipleChoiceQuestionPlugin {
+    - pipeline : QuestionPipeline
+  }
+  class CaseQuestionPlugin {
+    - pipeline : QuestionPipeline
+  }
+  class QuestionPipeline {
+    - filters : List<QuestionFilter>
+    + addFilter(f : QuestionFilter) : QuestionPipeline
+    + execute(req : QuestionRequest) : boolean
+  }
+  interface QuestionFilter {
+    + process(req : QuestionRequest) : boolean
+    + getErrorMessage() : String
+  }
+  class ContentValidationFilter
+  class OptionsValidationFilter
+  class CorrectAnswerValidationFilter
+}
+
+package "Componente: Servicio de preguntas (MVC + Observer)" {
+  class QuestionService {
+    - repository : IQuestionRepository
+    - microkernel : QuestionMicrokernel
+    - emailService : IEmailService
+    - subject : Subject
+    + crearPregunta(req : QuestionRequest) : OperationResult
+    + actualizarPregunta(id : String, req : QuestionRequest) : OperationResult
+    + marcarPendienteDeRevision(id : String, autor : String) : OperationResult
+    + listarMisPreguntas(c : QuestionFilterCriteria) : PagedResult<Question>
+    + asignarRevisores(id : String, revisores : List<String>) : OperationResult
+  }
+  interface IQuestionRepository {
+    + save(q : Question) : boolean
+    + update(q : Question) : boolean
+    + search(c : QuestionFilterCriteria) : PagedResult<Question>
+  }
+  class SQLiteQuestionRepository
+  interface IEmailService {
+    + sendReviewAssignmentNotification(...) : void
+  }
+  class SmtpEmailService
+  class Subject {
+    - observers : List<Observer>
+    + notificarObservers() : void
+  }
+  interface Observer {
+    + actualizar() : void
+  }
+  class MyQuestionsFrame
+  class Question {
+    - id : String
+    - state : QuestionState
+    - distractors : List<String>
+    + changeState(s : QuestionState) : void
+  }
+}
+
+QuestionMicrokernel "1" o-- "1..*" QuestionPlugin : carga por Reflexion
+QuestionPlugin <|.. MultipleChoiceQuestionPlugin
+QuestionPlugin <|.. CaseQuestionPlugin
+MultipleChoiceQuestionPlugin "1" *-- "1" QuestionPipeline
+CaseQuestionPlugin "1" *-- "1" QuestionPipeline
+QuestionPipeline "1" o-- "1..*" QuestionFilter
+QuestionFilter <|.. ContentValidationFilter
+QuestionFilter <|.. OptionsValidationFilter
+QuestionFilter <|.. CorrectAnswerValidationFilter
+QuestionPlugin ..> Question : crea
+
+QuestionService --> "1" IQuestionRepository
+QuestionService --> "1" QuestionMicrokernel
+QuestionService --> "1" IEmailService
+QuestionService "1" *-- "1" Subject
+IQuestionRepository <|.. SQLiteQuestionRepository
+IEmailService <|.. SmtpEmailService
+Subject "1" o-- "0..*" Observer
+Observer <|.. MyQuestionsFrame
+QuestionService ..> Question : usa
+
+note bottom of QuestionMicrokernel
+  Microkernel: el nucleo solo conoce la interfaz
+  QuestionPlugin. Los plugins se registran en
+  plugins.properties y se instancian con
+  Class.forName(...).newInstance(): agregar un tipo
+  de pregunta no modifica el nucleo (OCP).
+end note
+note bottom of QuestionService
+  Los atributos son interfaces (DIP): se inyectan
+  por constructor. Al cambiar el banco, el Subject
+  notifica a las vistas Observer (MVC).
+end note
+@enduml

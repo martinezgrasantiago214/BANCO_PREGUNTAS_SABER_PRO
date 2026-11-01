@@ -1,8 +1,8 @@
-# Imagen generica para todos los microservicios.
-# Antes de construir: mvn -DskipTests package  (genera <modulo>/target/<modulo>-2.0.0.jar)
+# Imagen generica para cualquiera de los microservicios.
+# Requiere haber ejecutado antes "mvn package -DskipTests" en la raiz.
+# docker-compose.yml la construye una vez por servicio con el argumento SERVICE.
 FROM eclipse-temurin:17-jre
-ARG MODULE
+ARG SERVICE
 WORKDIR /app
-COPY ${MODULE}/target/${MODULE}-2.0.0.jar app.jar
-ENV JAVA_OPTS="-XX:MaxRAMPercentage=75"
-ENTRYPOINT ["sh", "-c", "java $JAVA_OPTS -jar /app/app.jar"]
+COPY ${SERVICE}/target/${SERVICE}-2.0.0.jar app.jar
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]
