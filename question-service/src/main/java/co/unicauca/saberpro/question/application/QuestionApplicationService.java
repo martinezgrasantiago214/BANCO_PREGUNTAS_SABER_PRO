@@ -59,24 +59,72 @@ public class QuestionApplicationService {
                 .orElseThrow(() -> new ResourceNotFoundException("No existe la pregunta " + id));
     }
 
+    /** Tamano maximo de pagina: ningun listado trae todas las preguntas de una vez. */
+    public static final int MAX_PAGE_SIZE = 50;
+
     /**
-     * HU03: listado de las preguntas del autor con filtros y paginacion.
+     * HU03: listado de las preguntas del autor con busqueda, filtros y
+     * paginacion (PSP-24 listado, PSP-25 busqueda por palabra clave, PSP-26
+     * filtros por estado y tema, PSP-27 paginacion).
      *
-     * TODO(PSP-24, PSP-25, PSP-26, PSP-27): validar los criterios y delegar en repository.search(criteria),
-     * que ya filtra por autor, estado, tema y palabra clave, y pagina.
+     * Normaliza los criterios (textos sin espacios sobrantes, tamano de
+     * pagina entre 1 y {@link #MAX_PAGE_SIZE}) y, si la pagina pedida ya no
+     * existe (por ejemplo, despues de aplicar un filtro), devuelve la ultima.
      */
     public PagedResult<Question> search(QuestionFilterCriteria criteria) {
-        throw new PendingIssueException("PSP-24", "listar, buscar, filtrar y paginar preguntas (HU03)");
+        QuestionFilterCriteria normalized = new QuestionFilterCriteria()
+                .setAuthorLogin(blankToNull(criteria.getAuthorLogin()))
+                .setStatus(criteria.getStatus())
+                .setTopic(blankToNull(criteria.getTopic()))
+                .setKeyword(blankToNull(criteria.getKeyword()))
+                .setPage(criteria.getPage())
+                .setPageSize(Math.min(criteria.getPageSize(), MAX_PAGE_SIZE));
+
+        PagedResult<Question> result = repository.search(normalized);
+        if (result.items().isEmpty() && result.totalItems() > 0 && normalized.getPage() > result.totalPages()) {
+            return repository.search(normalized.setPage(result.totalPages()));
+        }
+        return result;
     }
 
     /**
-     * HU03: edita una pregunta propia.
+     * HU03: edita una pregunta propia (PSP-28).
      *
-     * TODO(PSP-28): solo el autor y solo si question.isEditable() (estado Borrador); los datos nuevos pasan
-     * por la misma validacion de la fabrica del tipo antes de repository.update(...).
+     * Solo el autor puede editarla y solo mientras su estado lo permita
+     * (Borrador; lo decide el patron State con isEditable()). Los datos
+     * nuevos pasan por la misma validacion estructural de la fabrica del
+     * tipo. La pregunta conserva su id, tipo, autor, fecha de creacion y
+     * estado.
      */
     public Question update(String id, QuestionRequest request) {
-        throw new PendingIssueException("PSP-28", "editar preguntas (HU03)");
+        Question current = findById(id);
+        if (!current.isAuthoredBy(request.getAuthorLogin())) {
+            throw new BusinessException("Solo el autor de la pregunta puede editarla.");
+        }
+        if (!current.isEditable()) {
+            throw new BusinessException("Solo se pueden editar preguntas en estado Borrador. Esta pregunta esta en "
+                    + current.getStatus().getLabel() + ".");
+        }
+
+        QuestionRequest data = new QuestionRequest(current.getType(), request.getContext(),
+                request.getDirectQuestion(), request.getDistractors(), request.getCorrectAnswer(),
+                request.getJustification(), request.getBibliography(), request.getCompetence(),
+                request.getTopic(), request.getSubtopic(), request.getDifficultyLevel(), current.getAuthorLogin());
+        factories.forType(current.getType())
+                .orElseThrow(() -> new BusinessException("No hay una fabrica para el tipo " + current.getType()))
+                .validate(data);
+
+        Question updated = Question.builder()
+                .id(current.getId())
+                .type(current.getType())
+                .fromRequest(data)
+                .createdAt(current.getCreatedAt())
+                .status(current.getStatus())
+                .build();
+        if (!repository.update(updated)) {
+            throw new BusinessException("No fue posible guardar los cambios de la pregunta " + id + ".");
+        }
+        return updated;
     }
 
     /**
@@ -128,5 +176,9 @@ public class QuestionApplicationService {
     /** Tipos de pregunta disponibles (fabricas cargadas por reflexion). */
     public List<QuestionFactory> availableTypes() {
         return factories.all();
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }
