@@ -1,25 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
          xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
+
+    <!--
+        Punto de entrada unico del backend: el frontend solo conoce esta URL y
+        el gateway enruta cada peticion al microservicio que corresponde.
+        Tambien publica un Swagger UI que agrupa la documentacion de todos.
+    -->
     <parent>
         <groupId>co.unicauca.saberpro</groupId>
-        <artifactId>banco-preguntas-saberpro</artifactId>
+        <artifactId>banco-preguntas-saber-pro</artifactId>
         <version>2.0.0</version>
     </parent>
+
     <artifactId>api-gateway</artifactId>
     <name>api-gateway</name>
-    <description>Punto unico de entrada para el frontend + Swagger UI unificado</description>
 
     <dependencies>
         <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-gateway</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-netflix-eureka-client</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>

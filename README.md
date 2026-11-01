@@ -1,180 +1,121 @@
-# Banco de Preguntas Saber PRO — Iteración 2
+# Banco de Preguntas Saber PRO — Segundo corte (microservicios)
 
-**Ingeniería de Software II · Universidad del Cauca · 2026.2**
+Refactorizacion del monolito del primer corte a una solucion distribuida con
+**microservicios** y **arquitectura orientada a eventos** (RabbitMQ), con el
+**frontend (Java Swing) separado del backend** y comunicado por **API REST**
+a traves de un **API Gateway**.
 
-Refactorización del monolito de la iteración 1 hacia una **arquitectura de microservicios orientada a eventos**. El objetivo es garantizar la **escalabilidad** sin perder la **modificabilidad** que se logró en el primer corte.
+> El codigo del monolito sigue en el historial de git (commit `74ab78d` y
+> anteriores). Lo reutilizable se migro a los servicios; las pantallas que aun
+> no existen se pueden consultar alli, por ejemplo:
+> `git show 74ab78d:src/main/java/co/unicauca/saberpro/presentation/MyQuestionsFrame.java`
 
-> Documento de arquitectura completo: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md)
+## Arquitectura
 
-```mermaid
-flowchart LR
-  UI["frontend-desktop<br/>(Swing · MVC · Facade)"] -->|REST + X-User-Login| GW["api-gateway :8080<br/>Swagger unificado"]
-  GW -->|lb://| US[user-service]
-  GW -->|lb://| QS[question-service]
-  GW -->|lb://| RS[review-service]
-  GW -->|lb://| NS[notification-service ×N]
-  QS <-->|eventos| MQ[(RabbitMQ<br/>saberpro.events)]
-  RS <-->|eventos| MQ
-  MQ -->|eventos| NS
-  RS -.REST.-> US
-  NS -.REST.-> US
-  US --- DB1[(users_db)]
-  QS --- DB2[(questions_db)]
-  RS --- DB3[(reviews_db)]
-  NS --- DB4[(notifications_db)]
-  EU[discovery-server<br/>Eureka :8761]
+```
+ frontend (Swing) ──REST──> api-gateway :8080 ──┬──> user-service :8081          (Gestion de Usuarios)
+                                                ├──> question-service :8082      (Gestion, Validacion y Ciclo de vida de Preguntas)
+                                                └──> review-service :8083        (Revision por Pares)
+
+ question-service ──┐                         ┌──> review-service        (question.submitted)
+ review-service   ──┴─> RabbitMQ (saberpro.events, topic) ─┼──> question-service      (review.evaluated)
+                                                           └──> notification-service :8084 (review.assigned, review.evaluated)
 ```
 
-## Historias de usuario
+| Modulo | Que contiene |
+|--------|--------------|
+| `common` | Contratos compartidos: eventos de dominio, enums del API (`QuestionStatus` con su color, `DifficultyLevel`, `Role`, `EvaluationVerdict`), reglas de los campos (`QuestionField`), bus de eventos (Observer) y manejo de errores HTTP. |
+| `user-service` | Login, registro y consulta de usuarios (SQLite propio). |
+| `question-service` | Preguntas: Builder, fabricas por tipo, validacion estructural, estados (State), SQLite propio. Publica `question.created` / `question.submitted`, consume `review.evaluated`. |
+| `review-service` | Asignacion de revisores (HU04) y evaluaciones (HU05). Consume `question.submitted`, publica `review.assigned` / `review.evaluated`. |
+| `notification-service` | Escucha eventos y envia correos (SMTP o bandeja de salida en archivo). Escala con varias instancias sobre las mismas colas. |
+| `api-gateway` | Spring Cloud Gateway: unico punto de entrada y Swagger UI unificado. |
+| `frontend` | Cliente Swing; solo conoce el gateway (via `BancoPreguntasFacade`). |
 
-| HU | Descripción | Servicio | Endpoint principal |
-|----|-------------|----------|--------------------|
-| HU01 | Crear pregunta de selección múltiple con única respuesta y validación estructural | question-service | `POST /api/questions` |
-| HU02 | Cambiar de *Borrador* a *Pendiente de revisión*, con estados en colores | question-service | `POST /api/questions/{id}/submit-for-review` |
-| HU03 | Listar mis preguntas con paginación y filtros, y editarlas | question-service | `GET /api/questions?author=…` · `PUT /api/questions/{id}` |
-| HU04 | El administrador asigna **entre 1 y 3** revisores, que reciben un correo | review-service + notification-service | `POST /api/reviews/{id}/reviewers` |
-| **HU05** | El revisor lista sus preguntas asignadas, las evalúa, deja observaciones y las aprueba o rechaza, con notificación a los implicados | review-service + question-service + notification-service | `GET /api/reviews/assigned` · `POST /api/reviews/{id}/evaluations` |
+Cada servicio es dueno de sus datos: ninguno lee la base de datos de otro; se
+comunican por REST (consultas) o por eventos (cambios).
 
-## Módulos
+## Como ejecutar
 
-| Módulo | Puerto | Responsabilidad |
-|--------|--------|-----------------|
-| `common-events` | — | Contratos de eventos (*Published Language*). Es Java puro, sin framework. |
-| `common-outbox` | — | *Transactional Outbox*: guarda los eventos en la misma transacción que el agregado y un *relay* los entrega a RabbitMQ con confirmación. Lo usan question-service y review-service. |
-| `discovery-server` | 8761 | Eureka: registro y descubrimiento de instancias. |
-| `api-gateway` | 8080 | Punto único de entrada, balanceo `lb://` y Swagger UI que agrupa las 4 APIs. |
-| `user-service` | 8081* | Contexto *Identity & Access*. |
-| `question-service` | 8082* | Contextos *Gestión de Preguntas*, *Ciclo de Vida* y *Validación Estructural*. |
-| `review-service` | 8083* | Contexto *Revisión por Pares*. |
-| `notification-service` | 8084* | Contexto de soporte *Notificaciones*. Es stateless respecto a los mensajes y escala horizontalmente. |
-| `frontend-desktop` | — | Cliente Java Swing con MVC. Solo conoce la URL del gateway. |
-
-\* Solo cuando se ejecutan en local. En Docker no se publican, y se accede a ellos únicamente a través del gateway, lo que permite escalarlos.
-
-Cada servicio sigue una **arquitectura hexagonal** con tres paquetes:
-
-- `domain`: entidades y reglas, en Java puro.
-- `application`: casos de uso y puertos.
-- `infrastructure`: adaptadores REST, JPA, RabbitMQ y clientes REST.
-
-## Ejecución
-
-Requisitos: **JDK 17+**, **Maven 3.9+** y **Docker** con Docker Compose.
-
-### Opción A: todo en Docker (recomendada para la demo)
+Requisitos: JDK 17+ y Maven. Para los eventos, Docker (RabbitMQ).
 
 ```bash
-mvn clean package -DskipTests          # genera los .jar de cada servicio
-docker compose up --build -d           # RabbitMQ, PostgreSQL, Eureka, gateway y 4 servicios
-mvn -pl frontend-desktop exec:java     # abre el cliente de escritorio
+mvn package -DskipTests          # compila todo y genera los jar
+
+# Opcion A: todo el backend en Docker
+docker compose up --build
+
+# Opcion B: desde el IDE / consola
+docker compose up rabbitmq       # solo el broker
+java -jar user-service/target/user-service-2.0.0.jar
+java -jar question-service/target/question-service-2.0.0.jar
+java -jar review-service/target/review-service-2.0.0.jar
+java -jar notification-service/target/notification-service-2.0.0.jar
+java -jar api-gateway/target/api-gateway-2.0.0.jar
+
+# Frontend (con el gateway arriba)
+java -jar frontend/target/frontend-2.0.0.jar
+# o: mvn -pl frontend exec:java
 ```
 
-Espere unos 40 segundos a que los servicios aparezcan en Eureka antes de iniciar sesión.
+- Swagger UI unificado: http://localhost:8080/swagger-ui.html
+- Consola de RabbitMQ: http://localhost:15672 (guest / guest)
+- Si el puerto 8080 esta ocupado: `PORT=8090` para el gateway y
+  `-Dsaberpro.gateway.url=http://localhost:8090` para el frontend.
+- Sin RabbitMQ los servicios arrancan y el API responde, pero los eventos no
+  se entregan (el health de los servicios con eventos aparece `DOWN`).
+- Datos: `~/BancoPreguntasSaberPro/` (`user-service.db`, `question-service.db`,
+  `outbox/`). Usuarios de prueba: `admin/Admin123!`, `autor1/Autor123!`,
+  `rev1/Revisor123!`, `rev2/Revisor123!`.
+- Correo real: copiar `notification-service/src/main/resources/mail.properties.example`
+  como `mail.properties` (esta en `.gitignore`).
+- Postman: `postman/BancoPreguntas-API.postman_collection.json` (18 peticiones via gateway).
 
-### Opción B: servicios desde el IDE
+## Patrones de diseno GoF
 
-Use H2 en archivo y deje en Docker solo RabbitMQ:
+| Tipo | Patron | Donde |
+|------|--------|-------|
+| Creacional | **Builder** | `question-service/.../domain/Question.java` (`Question.builder()`) |
+| Creacional | **Factory Method** | `question-service/.../domain/factory/QuestionFactory.java` y sus subclases (`createQuestion`, `createValidationPipeline`), cargadas por reflexion en `QuestionFactoryRegistry` |
+| Estructural | **Adapter** | `notification-service/.../channel/SmtpEmailChannelAdapter.java` adapta `SmtpMailClient` a `NotificationChannel` |
+| Estructural | **Facade** | `frontend/.../facade/BancoPreguntasFacade.java` |
+| Comportamiento | **State** | `question-service/.../domain/state/` (Borrador, PendienteRevision, Aprobada, Rechazada, Eliminada) |
+| Comportamiento | **Observer** | `common/.../events/DomainEventBus.java` (observadores: log y `RabbitEventForwarder` hacia el broker); en el frontend, `Subject`/`Observer` para refrescar pantallas |
 
-```bash
-docker compose up -d rabbitmq
-# Ejecutar en este orden: DiscoveryServerApplication, ApiGatewayApplication,
-# UserServiceApplication, QuestionServiceApplication, ReviewServiceApplication,
-# NotificationServiceApplication, DesktopApp
-```
+## Estado de los issues de Jira
 
-### URLs útiles
+Hechos: **PSP-14** y **PSP-15** (formulario `frontend/.../ui/CreateQuestionFrame.java`
+y reglas `common/.../contract/QuestionField.java`).
 
-| Recurso | URL |
-|---------|-----|
-| Swagger UI (las 4 APIs, con selector arriba a la derecha) | http://localhost:8080/swagger-ui.html |
-| Panel de Eureka (instancias registradas) | http://localhost:8761 |
-| Consola de RabbitMQ (colas, mensajes y consumidores) | http://localhost:15672 — guest / guest |
-| Correos simulados | carpeta `./outbox/` |
+Lo pendiente esta marcado en el codigo con `TODO(PSP-xx)` y, en el API,
+responde **501 Not Implemented** con el issue. Para encontrarlos:
+`git grep -n "TODO(PSP-"`.
 
-### Usuarios de prueba
+| Issue | Que falta | Donde |
+|-------|-----------|-------|
+| PSP-16, PSP-17, PSP-18 | Caso de uso crear pregunta (fabrica + validacion + guardar + evento) | `QuestionApplicationService.create` |
+| PSP-19 | Pruebas de creacion | `question-service/src/test` |
+| PSP-20 | Estados: ya implementados con el patron State; falta usarlos en los casos de uso | `domain/state/` |
+| PSP-21 | Enviar a revision + evento | `QuestionApplicationService.submitForReview` |
+| PSP-22 | Colores por estado en la pantalla (`statusColor` ya viene en el API) | frontend, pantalla "Mis preguntas" |
+| PSP-24 a PSP-27 | Listado, busqueda, filtros y paginacion (el repositorio ya filtra y pagina) | `QuestionApplicationService.search` + pantalla |
+| PSP-28 | Edicion (el formulario ya soporta modo edicion) | `QuestionApplicationService.update` |
+| PSP-23, PSP-29 | Pruebas | `question-service/src/test` |
+| PSP-30 | Registrar/listar preguntas pendientes desde el evento | `ReviewApplicationService.registerPendingQuestion / listPendingQuestions` |
+| PSP-31 a PSP-33 | Asignar 1 a 3 revisores (`ReviewPolicy` ya valida) y persistir | `ReviewApplicationService.assignReviewers`, `InMemoryReviewRepository` |
+| PSP-34 | Correo a los revisores | `NotificationService.onReviewersAssigned` |
+| PSP-35 | Pruebas | `review-service/src/test` |
+| PSP-45 | Preguntas asignadas al revisor | `ReviewApplicationService.listAssignedTo` + pantalla |
+| PSP-46 | Detalle de la pregunta para el revisor (`GET /api/questions/{id}` ya funciona) | pantalla |
+| PSP-47 | Registrar evaluacion y observaciones | `ReviewApplicationService.evaluate / listEvaluations` |
+| PSP-48 | Aprobada/Rechazada al recibir el evento | `QuestionApplicationService.applyEvaluation` |
+| PSP-49 | Publicar `QuestionEvaluatedEvent` y notificar autor y administrador | `ReviewApplicationService.evaluate`, `NotificationService.onQuestionEvaluated` |
+| PSP-50 | Pruebas | `review-service`, `notification-service` |
 
-| Rol | Login | Clave |
-|-----|-------|-------|
-| Administrador | `admin` | `Admin123!` |
-| Autor | `autor1`, `autor2` | `Autor123!` |
-| Revisor | `rev1`, `rev2`, `rev3` | `Revisor123!` |
-
-### Correo real (opcional)
-
-Copie `.env.example` como `.env` y complete los datos de una cuenta de Gmail con *contraseña de aplicación*.
-
-Con `SEED_EMAIL_BASE=equipo@gmail.com`, todos los usuarios de prueba reciben en la misma bandeja (`equipo+rev1@gmail.com`, etc.).
-
-Si no hay configuración de correo, los mensajes se escriben como `.txt` en `./outbox/` y también aparecen en la **bandeja de notificaciones** de la aplicación.
-
-## Escenario de escalabilidad
-
-```bash
-# Emular la latencia de un SMTP real y escalar los consumidores
-MAIL_SIMULATED_LATENCY_MS=300 docker compose up -d --scale notification-service=3 --scale review-service=2
-k6 run docs/carga/k6-escalabilidad.js   # mide p95 y tasa de errores
-```
-
-En la consola de RabbitMQ (`notification-service.events`) se observa que la cola se vacía aproximadamente 3 veces más rápido con 3 réplicas. Esto se logra sin cambiar código ni reiniciar los demás servicios. El detalle está en [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md#4-escenario-de-calidad-escalabilidad).
+En el frontend, `BancoPreguntasFacade` ya expone todas las operaciones; solo
+faltan las pantallas (ver los `TODO` en `MainFrame`).
 
 ## Pruebas
 
-```bash
-mvn test
-```
-
-Son pruebas unitarias del dominio y de los servicios de aplicación de cada microservicio, más algunas del cliente:
-
-| Módulo | Clases de prueba |
-|--------|------------------|
-| common-outbox | `OutboxIntegrationTest` (atomicidad, orden, caída del broker, backoff, health, purga) |
-| user-service | `UserTest`, `DefaultPasswordPolicyTest`, `UserServiceTest`, `Pbkdf2PasswordHasherTest` |
-| question-service | `QuestionTest`, `QuestionStateTest`, `QuestionValidationChainTest`, `QuestionPluginTest`, `QuestionServiceTest`, `SubmitForReviewOutboxTest` |
-| review-service | `QuestionReviewTest`, `ReviewerAssignmentTest`, `ReviewValueObjectsTest`, `DecisionPolicyTest`, `ReviewServiceTest`, `ReviewOutboxTest` |
-| notification-service | `NotificationTest`, `NotificationTemplatesTest`, `NotificationServiceTest` |
-| frontend-desktop | `ClientLogicTest` |
-
-Las pruebas usan *fakes* en memoria (`testdoubles`) en lugar de mocks. Esto es posible gracias a la inversión de dependencias, porque la aplicación solo depende de puertos.
-
-La colección `postman/BancoPreguntas-Iteracion2.postman_collection.json` recorre HU01 a HU05 de extremo a extremo a través del gateway.
-
-## Patrones de diseño GoF
-
-| Categoría | Patrón | Clase(s) |
-|-----------|--------|----------|
-| Creacional | Builder | `question-service · Question.Builder` |
-| Creacional | Factory Method | `question-service · QuestionTypePlugin.createQuestion()` → `MultipleChoiceQuestionPlugin` |
-| Estructural | Adapter | `notification-service · SmtpEmailSenderAdapter`, `OutboxFileEmailSenderAdapter` → `EmailSenderPort` |
-| Estructural | Facade | `frontend-desktop · SaberProApiFacade` |
-| Comportamiento | State | `question-service · QuestionState` + `DraftState`, `PendingReviewState`, `InReviewState`, `ApprovedState`, `RejectedState` |
-| Comportamiento | Strategy | `review-service · DecisionPolicy` → `UnanimousApprovalPolicy`, `MajorityPolicy` |
-| Comportamiento (adicional) | Chain of Responsibility | `question-service · QuestionValidationHandler` y sus 5 reglas |
-| Comportamiento (adicional) | Template Method | `notification-service · NotificationTemplate` |
-| Comportamiento (adicional) | Observer | `frontend-desktop · AppEvents` / `AppObserver` (MVC) |
-
-## Estructura del repositorio
-
-```
-├── common-events/          eventos de integración compartidos
-├── common-outbox/          Transactional Outbox + relay (auto-configuración)
-├── discovery-server/       Eureka
-├── api-gateway/            Spring Cloud Gateway + Swagger
-├── user-service/           ┐
-├── question-service/       │ domain / application / infrastructure
-├── review-service/         │
-├── notification-service/   ┘
-├── frontend-desktop/       Swing: api (Facade) · model · controller · view
-├── docs/
-│   ├── ARQUITECTURA.md
-│   ├── diagramas/          C4 (PlantUML), contextos, secuencia y clases
-│   └── carga/              script k6 del escenario de escalabilidad
-├── postman/
-├── docker/postgres/        creación de las 4 bases de datos
-├── docker-compose.yml
-└── Dockerfile              imagen genérica (ARG MODULE)
-```
-
-## Enlaces de la entrega
-
-- Video de sustentación (YouTube): _pendiente_
-- Tablero del Sprint 2: _pendiente_
+`mvn test` ejecuta 99 pruebas JUnit 5 en los 7 modulos (entidades, servicios,
+patrones, repositorios SQLite, cliente HTTP y fachada del frontend).

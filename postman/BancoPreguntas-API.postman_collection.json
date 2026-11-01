@@ -1,0 +1,211 @@
+{
+  "info": {
+    "_postman_id": "e3b5c419-7dab-42b4-bbf4-022593548b5d",
+    "name": "Banco de Preguntas Saber PRO - Microservicios (via API Gateway)",
+    "description": "Todas las peticiones pasan por el API Gateway ({{baseUrl}}). Las que responden 501 Not Implemented indican el issue de Jira que las implementa.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "01 POST login (autor1)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]},
+        "description": "user-service. 200 con los datos del usuario.",
+        "body": {"mode": "raw", "raw": "{\n  \"login\": \"autor1\",\n  \"password\": \"Autor123!\"\n}"}
+      }
+    },
+    {
+      "name": "02 POST login con clave incorrecta (401)",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]},
+        "body": {"mode": "raw", "raw": "{\n  \"login\": \"autor1\",\n  \"password\": \"incorrecta\"\n}"}
+      }
+    },
+    {
+      "name": "03 POST registrar usuario",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {"raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"]},
+        "description": "user-service. 201, o 400 si el login ya existe o la clave no cumple la politica.",
+        "body": {"mode": "raw", "raw": "{\n  \"login\": \"rev3\",\n  \"fullName\": \"Docente Revisor Tres\",\n  \"email\": \"rev3@unicauca.edu.co\",\n  \"role\": \"REVISOR\",\n  \"password\": \"Revisor123!\"\n}"}
+      }
+    },
+    {
+      "name": "04 GET usuarios",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/api/users", "host": ["{{baseUrl}}"], "path": ["api", "users"]}
+      }
+    },
+    {
+      "name": "05 GET revisores (HU04)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/api/users/reviewers", "host": ["{{baseUrl}}"], "path": ["api", "users", "reviewers"]}
+      }
+    },
+    {
+      "name": "06 GET usuario por login",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/api/users/rev1", "host": ["{{baseUrl}}"], "path": ["api", "users", "rev1"]},
+        "description": "Lo usa el notification-service para obtener el correo de un usuario."
+      }
+    },
+    {
+      "name": "07 GET tipos de pregunta",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/api/questions/types", "host": ["{{baseUrl}}"], "path": ["api", "questions", "types"]},
+        "description": "question-service. Fabricas (Factory Method) cargadas por reflexion."
+      }
+    },
+    {
+      "name": "08 POST crear pregunta (HU01) [PSP-16/17/18]",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "if (pm.response.code === 201) {",
+              "    pm.collectionVariables.set('questionId', pm.response.json().id);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {"raw": "{{baseUrl}}/api/questions", "host": ["{{baseUrl}}"], "path": ["api", "questions"]},
+        "description": "201 y guarda el id en questionId. Hasta implementar PSP-18 responde 501.",
+        "body": {"mode": "raw", "raw": "{\n  \"type\": \"MULTIPLE_CHOICE\",\n  \"context\": \"Una empresa necesita que su banco de preguntas admita nuevos tipos de pregunta sin modificar el nucleo del sistema.\",\n  \"directQuestion\": \"¿Que patron arquitectonico permite agregar funcionalidad mediante plugins sin modificar el nucleo?\",\n  \"distractors\": [\"Microkernel\", \"Cliente-Servidor\", \"Capas\", \"Broker\"],\n  \"correctAnswer\": \"Microkernel\",\n  \"justification\": \"El patron Microkernel separa un nucleo minimo de los plugins que extienden su funcionalidad.\",\n  \"bibliography\": \"Richards, M. Software Architecture Patterns. O'Reilly, 2015.\",\n  \"competence\": \"Arquitectura de software\",\n  \"topic\": \"Patrones arquitectonicos\",\n  \"subtopic\": \"Microkernel\",\n  \"difficultyLevel\": \"MEDIO\",\n  \"authorLogin\": \"autor1\"\n}"}
+      }
+    },
+    {
+      "name": "09 GET mis preguntas con filtros y paginacion (HU03) [PSP-24..27]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/questions?author=autor1&status=BORRADOR&keyword=patron&page=1&size=10",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "questions"],
+          "query": [
+            {"key": "author", "value": "autor1"},
+            {"key": "status", "value": "BORRADOR"},
+            {"key": "keyword", "value": "patron"},
+            {"key": "page", "value": "1"},
+            {"key": "size", "value": "10"}
+          ]
+        }
+      }
+    },
+    {
+      "name": "10 GET pregunta por id",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/api/questions/{{questionId}}", "host": ["{{baseUrl}}"], "path": ["api", "questions", "{{questionId}}"]},
+        "description": "200, o 404 si no existe. Incluye status, statusLabel y statusColor (HU02)."
+      }
+    },
+    {
+      "name": "11 PUT editar pregunta (HU03) [PSP-28]",
+      "request": {
+        "method": "PUT",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {"raw": "{{baseUrl}}/api/questions/{{questionId}}", "host": ["{{baseUrl}}"], "path": ["api", "questions", "{{questionId}}"]},
+        "description": "Solo el autor y solo en Borrador.",
+        "body": {"mode": "raw", "raw": "{\n  \"type\": \"MULTIPLE_CHOICE\",\n  \"context\": \"Contexto editado de la pregunta.\",\n  \"directQuestion\": \"¿Que patron permite agregar plugins sin tocar el nucleo?\",\n  \"distractors\": [\"Microkernel\", \"Cliente-Servidor\", \"Capas\", \"Broker\"],\n  \"correctAnswer\": \"Microkernel\",\n  \"justification\": \"El Microkernel separa el nucleo de los plugins.\",\n  \"bibliography\": \"Richards, M. Software Architecture Patterns. O'Reilly, 2015.\",\n  \"competence\": \"Arquitectura de software\",\n  \"topic\": \"Patrones arquitectonicos\",\n  \"subtopic\": \"Microkernel\",\n  \"difficultyLevel\": \"ALTO\",\n  \"authorLogin\": \"autor1\"\n}"}
+      }
+    },
+    {
+      "name": "12 PATCH enviar a revision (HU02) [PSP-21]",
+      "request": {
+        "method": "PATCH",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {"raw": "{{baseUrl}}/api/questions/{{questionId}}/submit-review", "host": ["{{baseUrl}}"], "path": ["api", "questions", "{{questionId}}", "submit-review"]},
+        "description": "Borrador -> Pendiente de revision. Publica el evento question.submitted.",
+        "body": {"mode": "raw", "raw": "{\n  \"authorLogin\": \"autor1\"\n}"}
+      }
+    },
+    {
+      "name": "13 GET preguntas pendientes de revision (HU04) [PSP-30]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/api/reviews/pending-questions", "host": ["{{baseUrl}}"], "path": ["api", "reviews", "pending-questions"]}
+      }
+    },
+    {
+      "name": "14 POST asignar revisores (HU04) [PSP-31..34]",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {"raw": "{{baseUrl}}/api/reviews/assignments", "host": ["{{baseUrl}}"], "path": ["api", "reviews", "assignments"]},
+        "description": "Entre 1 y 3 revisores. Publica review.assigned y el notification-service envia los correos.",
+        "body": {"mode": "raw", "raw": "{\n  \"questionId\": \"{{questionId}}\",\n  \"reviewers\": [\"rev1\", \"rev2\"],\n  \"assignedBy\": \"admin\"\n}"}
+      }
+    },
+    {
+      "name": "15 GET preguntas asignadas a rev1 (HU05) [PSP-45]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/reviews/assignments?reviewer=rev1",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "reviews", "assignments"],
+          "query": [{"key": "reviewer", "value": "rev1"}]
+        }
+      }
+    },
+    {
+      "name": "16 POST evaluar pregunta (HU05) [PSP-47..49]",
+      "request": {
+        "method": "POST",
+        "header": [{"key": "Content-Type", "value": "application/json"}],
+        "url": {"raw": "{{baseUrl}}/api/reviews/evaluations", "host": ["{{baseUrl}}"], "path": ["api", "reviews", "evaluations"]},
+        "description": "verdict: APROBADA o RECHAZADA. Publica review.evaluated (cambia el estado y notifica).",
+        "body": {"mode": "raw", "raw": "{\n  \"questionId\": \"{{questionId}}\",\n  \"reviewerLogin\": \"rev1\",\n  \"verdict\": \"RECHAZADA\",\n  \"observations\": \"El distractor 'Capas' es demasiado obvio; reemplazarlo.\"\n}"}
+      }
+    },
+    {
+      "name": "17 GET observaciones de una pregunta (HU05) [PSP-47]",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "{{baseUrl}}/api/reviews/evaluations?questionId={{questionId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["api", "reviews", "evaluations"],
+          "query": [{"key": "questionId", "value": "{{questionId}}"}]
+        }
+      }
+    },
+    {
+      "name": "18 GET documentacion OpenAPI del question-service",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {"raw": "{{baseUrl}}/docs/question-service/v3/api-docs", "host": ["{{baseUrl}}"], "path": ["docs", "question-service", "v3", "api-docs"]},
+        "description": "Swagger UI unificado: {{baseUrl}}/swagger-ui.html"
+      }
+    }
+  ],
+  "variable": [
+    {"key": "baseUrl", "value": "http://localhost:8080"},
+    {"key": "questionId", "value": ""}
+  ]
+}

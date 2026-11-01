@@ -1,50 +1,31 @@
 @startuml c4-contenedores
-!include <C4/C4_Container>
-title Banco de Preguntas Saber PRO - C4 Nivel 2: Contenedores (microservicios + eventos)
+!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+LAYOUT_TOP_DOWN()
+title Diagrama de Contenedores (C4 nivel 2) - Banco de Preguntas Saber PRO
 
-Person(usuario, "Autor / Administrador / Revisor")
-System_Ext(smtp, "Servidor SMTP")
+Enterprise_Boundary(unicauca, "Universidad del Cauca - Programa de Ingenieria de Sistemas") {
+Person(autor, "Autor de preguntas", "Docente que crea preguntas de seleccion multiple y las envia a revision.")
+Person(admin, "Administrador", "Docente que gestiona usuarios y asigna revisores a preguntas pendientes.")
+Person(revisor, "Revisor", "Docente que recibe por correo las preguntas que se le asignan.")
 
-System_Boundary(sys, "Banco de Preguntas Saber PRO") {
-  Container(desktop, "Frontend de escritorio", "Java 17, Swing, MVC", "Interfaz por rol. Solo conoce la URL del gateway")
-  Container(gateway, "API Gateway", "Spring Cloud Gateway", "Punto único de entrada, enrutamiento lb://, Swagger UI unificado")
-  Container(eureka, "Discovery Server", "Spring Cloud Netflix Eureka", "Registro y descubrimiento de instancias")
-
-  Container(users, "user-service", "Spring Boot", "Identity & Access: login, registro, roles")
-  Container(questions, "question-service", "Spring Boot", "Gestión de preguntas, ciclo de vida (State) y validación estructural")
-  Container(reviews, "review-service", "Spring Boot", "Revisión por pares: asignación, rúbrica, observaciones, decisión (Strategy)")
-  Container(notifications, "notification-service", "Spring Boot", "Consume eventos y notifica (correo + bandeja). Escala con N réplicas")
-
-  ContainerQueue(broker, "RabbitMQ", "AMQP, exchange topic saberpro.events", "Eventos de integración + DLQ")
-
-  ContainerDb(dbu, "users_db", "PostgreSQL")
-  ContainerDb(dbq, "questions_db", "PostgreSQL")
-  ContainerDb(dbr, "reviews_db", "PostgreSQL")
-  ContainerDb(dbn, "notifications_db", "PostgreSQL")
+System_Boundary(banco, "Banco de Preguntas Saber PRO") {
+  Container(desktop, "Aplicacion de escritorio", "Java 17, Swing", "Monolito en capas con MVC + Observer. Implementa HU01-HU04: crea y valida preguntas con el microkernel, lista con filtros y paginacion, cambia estados y asigna revisores.")
+  Container(api, "API REST", "Java 17, Spring Boot", "Expone por HTTP/JSON las mismas operaciones del banco reutilizando las capas de servicio, microkernel y acceso a datos.")
+  ContainerDb(db, "Base de datos", "SQLite (archivo bancopreguntas.db)", "Guarda usuarios (con contrasena cifrada) y preguntas con su estado y revisores asignados.")
+}
 }
 
-Rel(usuario, desktop, "Usa")
-Rel(desktop, gateway, "API REST JSON", "HTTP :8080 + X-User-Login")
-Rel(gateway, users, "/api/auth, /api/users", "HTTP lb://")
-Rel(gateway, questions, "/api/questions", "HTTP lb://")
-Rel(gateway, reviews, "/api/reviews", "HTTP lb://")
-Rel(gateway, notifications, "/api/notifications", "HTTP lb://")
+System_Ext(cliente, "Aplicacion cliente HTTP", "Otro programa (Postman hoy; una web o app movil a futuro) que usa el banco de preguntas a traves de su API REST.")
+System_Ext(correo, "Servidor de correo", "Servicio SMTP existente (por ejemplo Gmail) que entrega los correos a los docentes.")
 
-Rel(questions, broker, "Publica question.submitted / consume review.reviewers-assigned, review.completed")
-Rel(reviews, broker, "Consume question.submitted / publica review.*")
-Rel(notifications, broker, "Consume question.submitted y review.#")
-Rel(reviews, users, "Valida roles de admin/revisores", "REST lb://")
-Rel(notifications, users, "Resuelve nombre y correo", "REST lb://")
-Rel(notifications, smtp, "Envía correos", "SMTP")
+Rel(autor, desktop, "Crea, lista, edita y envia a revision sus preguntas")
+Rel(admin, desktop, "Asigna revisores y registra usuarios")
+Rel(cliente, api, "Consulta y gestiona preguntas", "JSON/HTTP")
+Rel(desktop, db, "Lee y escribe usuarios y preguntas", "JDBC")
+Rel(api, db, "Lee y escribe usuarios y preguntas", "JDBC")
+Rel(desktop, correo, "Envia correos de asignacion usando", "SMTP/STARTTLS")
+Rel(api, correo, "Envia correos de asignacion usando", "SMTP/STARTTLS")
+Rel(correo, revisor, "Envia correos a")
 
-Rel(users, dbu, "JPA")
-Rel(questions, dbq, "JPA")
-Rel(reviews, dbr, "JPA")
-Rel(notifications, dbn, "JPA")
-
-Rel_U(users, eureka, "Se registra")
-Rel_U(questions, eureka, "Se registra")
-Rel_U(reviews, eureka, "Se registra")
-Rel_U(notifications, eureka, "Se registra")
-Rel_U(gateway, eureka, "Descubre instancias")
+SHOW_LEGEND()
 @enduml
