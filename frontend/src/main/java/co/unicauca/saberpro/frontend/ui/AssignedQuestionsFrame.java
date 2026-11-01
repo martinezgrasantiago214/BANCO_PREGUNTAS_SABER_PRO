@@ -1,5 +1,6 @@
 package co.unicauca.saberpro.frontend.ui;
 
+import co.unicauca.saberpro.common.contract.QuestionStatus;
 import co.unicauca.saberpro.frontend.AppContext;
 import co.unicauca.saberpro.frontend.client.ApiException;
 import co.unicauca.saberpro.frontend.facade.BancoPreguntasFacade;
@@ -103,9 +104,18 @@ public class AssignedQuestionsFrame extends JFrame implements Observer {
         btnReload.addActionListener(e -> reload());
         bar.add(btnReload);
 
-        JButton btnDetail = UiTheme.primaryButton("Ver detalle");
+        JButton btnDetail = UiTheme.secondaryButton("Ver detalle");
         btnDetail.addActionListener(e -> openDetail());
         bar.add(btnDetail);
+
+        JButton btnEvaluate = UiTheme.primaryButton("Evaluar");
+        btnEvaluate.addActionListener(e -> {
+            Row row = selectedRow();
+            if (row != null) {
+                evaluate(row);
+            }
+        });
+        bar.add(btnEvaluate);
         return bar;
     }
 
@@ -123,16 +133,51 @@ public class AssignedQuestionsFrame extends JFrame implements Observer {
     /** HU05 (PSP-46): abre la pregunta seleccionada en modo solo lectura. */
     private void openDetail() {
         Row row = selectedRow();
-        if (row == null) {
+        if (row == null || !isAvailable(row)) {
             return;
         }
+        QuestionDetailDialog detail = new QuestionDetailDialog(this, context, row.question());
+        if (row.isPending()) {
+            JButton btnEvaluate = UiTheme.primaryButton("Evaluar");
+            btnEvaluate.addActionListener(e -> {
+                detail.dispose();
+                evaluate(row);
+            });
+            detail.addAction(btnEvaluate);
+        }
+        detail.setVisible(true);
+    }
+
+    /** HU05 (PSP-47): abre el formulario de evaluacion si la pregunta sigue Pendiente de revision. */
+    private void evaluate(Row row) {
+        if (!isAvailable(row)) {
+            return;
+        }
+        if (!row.isPending()) {
+            JOptionPane.showMessageDialog(this, "La pregunta esta en estado " + row.question().statusLabel()
+                            + ". Solo se pueden evaluar preguntas Pendientes de revision.",
+                    "Evaluar pregunta", JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        EvaluationDialog dialog = new EvaluationDialog(this, context, row.question());
+        dialog.setVisible(true);
+        if (dialog.isSaved()) {
+            // El question-service cambia el estado al recibir el evento, un instante despues:
+            // se vuelve a cargar la lista para mostrar el estado nuevo.
+            Timer timer = new Timer(1500, e -> reload());
+            timer.setRepeats(false);
+            timer.start();
+        }
+    }
+
+    private boolean isAvailable(Row row) {
         if (row.question() == null) {
             JOptionPane.showMessageDialog(this, "No fue posible obtener la pregunta " + row.assignment().questionId()
                     + " del question-service. Intente actualizar la lista.", "Pregunta no disponible",
                     JOptionPane.WARNING_MESSAGE);
-            return;
+            return false;
         }
-        new QuestionDetailDialog(this, row.question()).setVisible(true);
+        return true;
     }
 
     /**
@@ -182,6 +227,10 @@ public class AssignedQuestionsFrame extends JFrame implements Observer {
 
     /** Una asignacion con los datos de su pregunta (null si el question-service no la devolvio). */
     record Row(AssignmentView assignment, QuestionView question) {
+
+        boolean isPending() {
+            return question != null && question.status() == QuestionStatus.PENDIENTE_REVISION;
+        }
 
         String questionText() {
             return question != null ? question.directQuestion()

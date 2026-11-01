@@ -7,6 +7,7 @@ import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.common.web.PendingIssueException;
 import co.unicauca.saberpro.review.access.IReviewRepository;
 import co.unicauca.saberpro.review.domain.Evaluation;
+import co.unicauca.saberpro.review.domain.EvaluationPolicy;
 import co.unicauca.saberpro.review.domain.PendingQuestion;
 import co.unicauca.saberpro.review.domain.ReviewAssignment;
 
@@ -67,20 +68,52 @@ public class ReviewApplicationService {
     }
 
     /**
-     * HU05: el revisor deja su evaluacion y observaciones.
+     * HU05 (PSP-47): el revisor registra su veredicto y sus observaciones.
      *
-     * TODO(PSP-47, PSP-48, PSP-49): verificar que la pregunta este asignada a ese revisor y pendiente,
-     * guardar la Evaluation y publicar QuestionEvaluatedEvent en eventBus (el question-service cambia
-     * el estado y el notification-service avisa al autor y al administrador).
+     * Solo se evalua una pregunta que este asignada a ese revisor y Pendiente
+     * de revision. Regla de decision: el primer revisor asignado que evalua
+     * decide el estado (Aprobada o Rechazada). Desde ese momento la pregunta
+     * ya no esta pendiente, asi que no admite mas evaluaciones, ni de ese
+     * revisor ni de los demas asignados.
+     *
+     * Es synchronized para que dos evaluaciones simultaneas de la misma
+     * pregunta no se registren las dos.
      */
-    public Evaluation evaluate(String questionId, String reviewerLogin, EvaluationVerdict verdict,
-                               String observations) {
-        throw new PendingIssueException("PSP-47", "registrar la evaluacion y observaciones (HU05)");
+    public synchronized Evaluation evaluate(String questionId, String reviewerLogin, EvaluationVerdict verdict,
+                                            String observations) {
+        String question = requireText(questionId, "Debe indicar la pregunta a evaluar.");
+        String reviewer = requireText(reviewerLogin, "Debe indicar el login del revisor.");
+        List<String> errors = EvaluationPolicy.validate(verdict, observations);
+        if (!errors.isEmpty()) {
+            throw new BusinessException(errors);
+        }
+
+        boolean assigned = repository.findAssignmentsByQuestion(question).stream()
+                .anyMatch(a -> a.isFor(question, reviewer));
+        if (!assigned) {
+            throw new BusinessException("La pregunta " + question + " no esta asignada al revisor " + reviewer + ".");
+        }
+        if (repository.findPendingQuestion(question).isEmpty()) {
+            throw new BusinessException("La pregunta " + question + " no esta Pendiente de revision.");
+        }
+        List<Evaluation> previous = repository.findEvaluationsByQuestion(question);
+        if (!previous.isEmpty()) {
+            Evaluation first = previous.get(0);
+            throw new BusinessException("La pregunta ya fue evaluada por " + first.getReviewerLogin() + " ("
+                    + first.getVerdict().getLabel() + ") y ya no esta Pendiente de revision.");
+        }
+
+        Evaluation evaluation = new Evaluation(question, reviewer, verdict, observations);
+        repository.saveEvaluation(evaluation);
+        return evaluation;
     }
 
-    /** TODO(PSP-47): HU05 - el autor lee las observaciones (repository.findEvaluationsByQuestion). */
+    /** HU05 (PSP-47): evaluaciones y observaciones de una pregunta, para que las lea el autor. */
     public List<Evaluation> listEvaluations(String questionId) {
-        throw new PendingIssueException("PSP-47", "consultar las observaciones de una pregunta (HU05)");
+        String question = requireText(questionId, "Debe indicar la pregunta.");
+        return repository.findEvaluationsByQuestion(question).stream()
+                .sorted(Comparator.comparing(Evaluation::getEvaluatedAt))
+                .toList();
     }
 
     private static String requireText(String value, String message) {

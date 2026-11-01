@@ -28,8 +28,6 @@ class ReviewApplicationServiceTest {
                 new QuestionSubmittedForReviewEvent("q-1", "autor1", "¿P?", Instant.now())));
         assertPending("PSP-30", service::listPendingQuestions);
         assertPending("PSP-32", () -> service.assignReviewers("q-1", List.of("rev1"), "admin"));
-        assertPending("PSP-47", () -> service.evaluate("q-1", "rev1", EvaluationVerdict.APROBADA, "Bien"));
-        assertPending("PSP-47", () -> service.listEvaluations("q-1"));
     }
 
     private void assertPending(String issue, Runnable call) {
