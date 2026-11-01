@@ -4,7 +4,6 @@ import co.unicauca.saberpro.common.contract.EvaluationVerdict;
 import co.unicauca.saberpro.common.contract.QuestionStatus;
 import co.unicauca.saberpro.common.events.QuestionEvaluatedEvent;
 import co.unicauca.saberpro.common.web.BusinessException;
-import co.unicauca.saberpro.common.web.PendingIssueException;
 import co.unicauca.saberpro.common.web.ResourceNotFoundException;
 import co.unicauca.saberpro.question.TestData;
 import co.unicauca.saberpro.question.access.SQLiteQuestionRepository;
@@ -23,10 +22,8 @@ import java.time.Instant;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Casos de uso del question-service. Las pruebas de los casos de uso
- * pendientes verifican que respondan con su issue de Jira; al implementarlos,
- * reemplacelas por pruebas del comportamiento real (PSP-19, PSP-23, PSP-50). HU03 (PSP-29)
- * se prueba en {@link ListAndEditQuestionsTest}.
+ * Casos de uso del question-service. HU01 se prueba en {@link CreateQuestionTest},
+ * HU02 en {@link SubmitForReviewTest} y HU03 en {@link ListAndEditQuestionsTest}.
  */
 class QuestionApplicationServiceTest {
 
@@ -59,11 +56,6 @@ class QuestionApplicationServiceTest {
     @Test
     void exponeLosTiposDePreguntaCargados() {
         assertEquals(3, service.availableTypes().size());
-    }
-
-    @Test
-    void losCasosDeUsoPendientesIndicanSuIssue() {
-        assertPending("PSP-21", () -> service.submitForReview("q-1", "autor1"));
     }
 
     // ---- HU05 (PSP-48 y PSP-50): veredicto del revisor ----
@@ -130,8 +122,4 @@ class QuestionApplicationServiceTest {
         assertThrows(BusinessException.class, () -> service.applyEvaluation(null));
     }
 
-    private void assertPending(String issue, Runnable call) {
-        PendingIssueException ex = assertThrows(PendingIssueException.class, call::run);
-        assertEquals(issue, ex.getIssueKey());
-    }
 }
