@@ -88,6 +88,16 @@ Hechos:
 
 - **PSP-14** y **PSP-15**: formulario `frontend/.../ui/CreateQuestionFrame.java`
   y reglas `common/.../contract/QuestionField.java`.
+- **PSP-6 (HU01), subtareas PSP-16 a PSP-19**: crear preguntas. `QuestionApplicationService.create`
+  normaliza los datos, elige la fabrica del tipo (Factory Method), aplica la validacion
+  estructural completa y responde **400 con todos los errores juntos** (`QuestionPipeline.validateAll`),
+  guarda la pregunta en Borrador y publica `question.created`. El formulario muestra los errores
+  del servidor como lista. Pruebas en `CreateQuestionTest` y `QuestionControllerHu01Test`.
+- **PSP-9 (HU03), subtareas PSP-24 a PSP-29**: listado, busqueda (enunciado, contexto y tema),
+  filtros, paginacion y edicion de las preguntas del autor (403 si no es el autor, 409 si no
+  esta en Borrador). Backend en `QuestionApplicationService.search / update` y pantalla
+  `frontend/.../ui/MyQuestionsFrame.java` (menu "Mis preguntas" del autor).
+  Pruebas en `ListAndEditQuestionsTest`, `QuestionControllerHu03Test` y `MyQuestionsQueryTest`.
 - **PSP-44 (HU05, PSP-45 a PSP-50)**: el revisor lista sus preguntas asignadas,
   las lee, las evalua y deja observaciones; la pregunta pasa a Aprobada o
   Rechazada y se notifica al autor y a los administradores.
@@ -109,8 +119,6 @@ responde **501 Not Implemented** con el issue. Para encontrarlos:
 
 | Issue | Que falta | Donde |
 |-------|-----------|-------|
-| PSP-16, PSP-17, PSP-18 | Caso de uso crear pregunta (fabrica + validacion + guardar + evento) | `QuestionApplicationService.create` |
-| PSP-19 | Pruebas de creacion | `question-service/src/test` |
 | PSP-20 | Estados: ya implementados con el patron State; falta usarlos en los casos de uso | `domain/state/` |
 | PSP-21 | Enviar a revision + evento | `QuestionApplicationService.submitForReview` |
 | PSP-22 | Boton "Enviar a revision" (los colores por estado y su leyenda ya se ven en "Mis preguntas") | `MyQuestionsFrame` |

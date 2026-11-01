@@ -30,6 +30,23 @@ public class QuestionPipeline {
         return true;
     }
 
+    /**
+     * Ejecuta TODOS los filtros, sin detenerse en el primero que falla, y
+     * devuelve los mensajes de error de los que fallaron (lista vacia si la
+     * solicitud es valida). Asi el autor ve de una vez todo lo que debe
+     * corregir (PSP-17).
+     */
+    public List<String> validateAll(QuestionRequest request) {
+        List<String> errors = new ArrayList<>();
+        for (QuestionFilter filter : filters) {
+            if (!filter.process(request)) {
+                errors.add(filter.getErrorMessage());
+            }
+        }
+        lastError = errors.isEmpty() ? null : errors.get(0);
+        return errors;
+    }
+
     public String getLastError() {
         return lastError;
     }
