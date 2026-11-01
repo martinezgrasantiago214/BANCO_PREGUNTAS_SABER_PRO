@@ -1,5 +1,7 @@
 package co.unicauca.saberpro.question.application;
 
+import co.unicauca.saberpro.common.contract.EvaluationVerdict;
+import co.unicauca.saberpro.common.contract.QuestionStatus;
 import co.unicauca.saberpro.common.events.QuestionEvaluatedEvent;
 import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.common.web.PendingIssueException;
@@ -136,13 +138,39 @@ public class QuestionApplicationService {
     }
 
     /**
-     * HU05: aplica el veredicto de un revisor (evento que publica el review-service).
+     * HU05 (PSP-48): aplica el veredicto de un revisor, que llega en el evento
+     * review.evaluated del review-service.
      *
-     * TODO(PSP-48): buscar la pregunta, llamar question.approve() o question.reject() segun
-     * event.verdict(), y repository.update(...).
+     * El patron State decide si la transicion es valida: solo una pregunta
+     * Pendiente de revision se puede aprobar o rechazar; en otro estado se
+     * lanza InvalidStateTransitionException.
+     *
+     * Es idempotente: RabbitMQ puede entregar el mismo evento mas de una vez,
+     * y si la pregunta ya tiene el estado del veredicto no se hace nada.
+     *
+     * @return la pregunta con su estado final.
      */
-    public void applyEvaluation(QuestionEvaluatedEvent event) {
-        throw new PendingIssueException("PSP-48", "cambiar el estado a Aprobada/Rechazada (HU05)");
+    public synchronized Question applyEvaluation(QuestionEvaluatedEvent event) {
+        if (event == null || event.questionId() == null || event.verdict() == null) {
+            throw new BusinessException("El evento de evaluacion no trae la pregunta o el veredicto.");
+        }
+        Question question = findById(event.questionId());
+        boolean approve = event.verdict() == EvaluationVerdict.APROBADA;
+        QuestionStatus target = approve ? QuestionStatus.APROBADA : QuestionStatus.RECHAZADA;
+        if (question.getStatus() == target) {
+            return question;
+        }
+
+        if (approve) {
+            question.approve();
+        } else {
+            question.reject();
+        }
+        if (!repository.update(question)) {
+            throw new IllegalStateException("No fue posible guardar el nuevo estado de la pregunta "
+                    + question.getId() + ".");
+        }
+        return question;
     }
 
     /** Tipos de pregunta disponibles (fabricas cargadas por reflexion). */

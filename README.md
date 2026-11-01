@@ -86,12 +86,22 @@ java -jar frontend/target/frontend-2.0.0.jar
 
 Hechos:
 
-- **PSP-14** y **PSP-15**: formulario `frontend/.../ui/CreateQuestionFrame.java` y reglas
-  `common/.../contract/QuestionField.java`.
-- **PSP-9 (HU03), subtareas PSP-24 a PSP-29**: listado, busqueda, filtros, paginacion y
-  edicion de las preguntas del autor. Backend en `QuestionApplicationService.search / update`
-  y pantalla `frontend/.../ui/MyQuestionsFrame.java` (menu "Mis preguntas" del autor).
-  Pruebas en `ListAndEditQuestionsTest` (question-service) y `MyQuestionsQueryTest` (frontend).
+- **PSP-14** y **PSP-15**: formulario `frontend/.../ui/CreateQuestionFrame.java`
+  y reglas `common/.../contract/QuestionField.java`.
+- **PSP-44 (HU05, PSP-45 a PSP-50)**: el revisor lista sus preguntas asignadas,
+  las lee, las evalua y deja observaciones; la pregunta pasa a Aprobada o
+  Rechazada y se notifica al autor y a los administradores.
+  - Backend: `ReviewApplicationService` (`listAssignedTo`, `evaluate`, `listEvaluations`),
+    `EvaluationPolicy`, `QuestionApplicationService.applyEvaluation` y
+    `NotificationService.onQuestionEvaluated`.
+  - Frontend: `AssignedQuestionsFrame`, `QuestionDetailDialog` (tambien muestra las
+    observaciones, para el autor) y `EvaluationDialog`.
+  - Reglas: solo se evalua una pregunta asignada al revisor y Pendiente de
+    revision; **el primer revisor asignado que evalua decide el estado** y despues
+    la pregunta no admite mas evaluaciones; al rechazar, las observaciones son
+    obligatorias (maximo 2000 caracteres).
+  - Para probarla de punta a punta hacen falta HU02 (PSP-21, enviar a revision)
+    y HU04 (PSP-30 a PSP-33, registrar la pregunta pendiente y asignar revisores).
 
 Lo pendiente esta marcado en el codigo con `TODO(PSP-xx)` y, en el API,
 responde **501 Not Implemented** con el issue. Para encontrarlos:
@@ -109,17 +119,11 @@ responde **501 Not Implemented** con el issue. Para encontrarlos:
 | PSP-31 a PSP-33 | Asignar 1 a 3 revisores (`ReviewPolicy` ya valida) y persistir | `ReviewApplicationService.assignReviewers`, `InMemoryReviewRepository` |
 | PSP-34 | Correo a los revisores | `NotificationService.onReviewersAssigned` |
 | PSP-35 | Pruebas | `review-service/src/test` |
-| PSP-45 | Preguntas asignadas al revisor | `ReviewApplicationService.listAssignedTo` + pantalla |
-| PSP-46 | Detalle de la pregunta para el revisor (`GET /api/questions/{id}` ya funciona) | pantalla |
-| PSP-47 | Registrar evaluacion y observaciones | `ReviewApplicationService.evaluate / listEvaluations` |
-| PSP-48 | Aprobada/Rechazada al recibir el evento | `QuestionApplicationService.applyEvaluation` |
-| PSP-49 | Publicar `QuestionEvaluatedEvent` y notificar autor y administrador | `ReviewApplicationService.evaluate`, `NotificationService.onQuestionEvaluated` |
-| PSP-50 | Pruebas | `review-service`, `notification-service` |
 
 En el frontend, `BancoPreguntasFacade` ya expone todas las operaciones; solo
 faltan las pantallas (ver los `TODO` en `MainFrame`).
 
 ## Pruebas
 
-`mvn test` ejecuta 99 pruebas JUnit 5 en los 7 modulos (entidades, servicios,
+`mvn test` ejecuta 122 pruebas JUnit 5 en los 7 modulos (entidades, servicios,
 patrones, repositorios SQLite, cliente HTTP y fachada del frontend).
