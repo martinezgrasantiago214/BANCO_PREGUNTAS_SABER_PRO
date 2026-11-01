@@ -2,6 +2,7 @@ package co.unicauca.saberpro.review.application;
 
 import co.unicauca.saberpro.common.contract.EvaluationVerdict;
 import co.unicauca.saberpro.common.events.DomainEventBus;
+import co.unicauca.saberpro.common.events.QuestionEvaluatedEvent;
 import co.unicauca.saberpro.common.events.QuestionSubmittedForReviewEvent;
 import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.common.web.PendingIssueException;
@@ -93,9 +94,8 @@ public class ReviewApplicationService {
         if (!assigned) {
             throw new BusinessException("La pregunta " + question + " no esta asignada al revisor " + reviewer + ".");
         }
-        if (repository.findPendingQuestion(question).isEmpty()) {
-            throw new BusinessException("La pregunta " + question + " no esta Pendiente de revision.");
-        }
+        PendingQuestion pending = repository.findPendingQuestion(question).orElseThrow(() ->
+                new BusinessException("La pregunta " + question + " no esta Pendiente de revision."));
         List<Evaluation> previous = repository.findEvaluationsByQuestion(question);
         if (!previous.isEmpty()) {
             Evaluation first = previous.get(0);
@@ -105,6 +105,11 @@ public class ReviewApplicationService {
 
         Evaluation evaluation = new Evaluation(question, reviewer, verdict, observations);
         repository.saveEvaluation(evaluation);
+
+        // PSP-49: el question-service cambia el estado y el notification-service avisa al autor
+        // y a los administradores.
+        eventBus.publish(new QuestionEvaluatedEvent(question, pending.authorLogin(), pending.directQuestion(),
+                reviewer, verdict, evaluation.getObservations(), evaluation.getEvaluatedAt()));
         return evaluation;
     }
 

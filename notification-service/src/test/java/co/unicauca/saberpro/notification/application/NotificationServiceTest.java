@@ -89,9 +89,5 @@ class NotificationServiceTest {
         PendingIssueException assigned = assertThrows(PendingIssueException.class, () -> service.onReviewersAssigned(
                 new ReviewersAssignedEvent("q-1", "¿P?", List.of("rev1"), "admin", Instant.now())));
         assertEquals("PSP-34", assigned.getIssueKey());
-
-        PendingIssueException evaluated = assertThrows(PendingIssueException.class, () -> service.onQuestionEvaluated(
-                new QuestionEvaluatedEvent("q-1", "autor1", "rev1", EvaluationVerdict.APROBADA, "Bien", Instant.now())));
-        assertEquals("PSP-49", evaluated.getIssueKey());
     }
 }
