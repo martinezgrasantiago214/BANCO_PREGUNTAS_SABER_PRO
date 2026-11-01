@@ -3,7 +3,8 @@ package co.unicauca.saberpro.question.application;
 import co.unicauca.saberpro.common.contract.DifficultyLevel;
 import co.unicauca.saberpro.common.contract.QuestionStatus;
 import co.unicauca.saberpro.common.events.DomainEventBus;
-import co.unicauca.saberpro.common.web.BusinessException;
+import co.unicauca.saberpro.common.web.ConflictException;
+import co.unicauca.saberpro.common.web.ForbiddenOperationException;
 import co.unicauca.saberpro.common.web.ResourceNotFoundException;
 import co.unicauca.saberpro.question.TestData;
 import co.unicauca.saberpro.question.access.PagedResult;
@@ -116,6 +117,14 @@ class ListAndEditQuestionsTest {
         }
 
         @Test
+        void laBusquedaTambienEncuentraPorTema() {
+            PagedResult<Question> page = service.search(mine("autor1").setKeyword("GoF"));
+
+            assertEquals(1, page.totalItems());
+            assertEquals("Patrones GoF", page.items().get(0).getTopic());
+        }
+
+        @Test
         void filtraPorEstado() {
             PagedResult<Question> page = service.search(mine("autor1").setStatus(QuestionStatus.BORRADOR));
 
@@ -219,7 +228,7 @@ class ListAndEditQuestionsTest {
         void otroUsuarioNoPuedeEditarla() {
             Question original = saved("autor1", "Tema", "¿Pregunta original del autor?", QuestionStatus.BORRADOR, 1);
 
-            BusinessException ex = assertThrows(BusinessException.class,
+            ForbiddenOperationException ex = assertThrows(ForbiddenOperationException.class,
                     () -> service.update(original.getId(), cambios("autor2")));
 
             assertTrue(ex.getMessage().contains("Solo el autor"));
@@ -231,7 +240,7 @@ class ListAndEditQuestionsTest {
             Question enRevision = saved("autor1", "Tema", "¿Pregunta enviada a revision?",
                     QuestionStatus.PENDIENTE_REVISION, 1);
 
-            BusinessException ex = assertThrows(BusinessException.class,
+            ConflictException ex = assertThrows(ConflictException.class,
                     () -> service.update(enRevision.getId(), cambios("autor1")));
 
             assertTrue(ex.getMessage().contains("Borrador"));

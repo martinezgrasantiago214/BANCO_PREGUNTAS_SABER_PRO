@@ -141,9 +141,10 @@ public class SQLiteQuestionRepository implements IQuestionRepository, AutoClosea
             params.add("%" + criteria.getTopic() + "%");
         }
         if (criteria.getKeyword() != null && !criteria.getKeyword().isBlank()) {
-            where.append(" AND (directQuestion LIKE ? OR context LIKE ?)");
-            params.add("%" + criteria.getKeyword() + "%");
-            params.add("%" + criteria.getKeyword() + "%");
+            where.append(" AND (directQuestion LIKE ? OR context LIKE ? OR topic LIKE ?)");
+            for (int i = 0; i < 3; i++) {
+                params.add("%" + criteria.getKeyword() + "%");
+            }
         }
 
         int pageSize = criteria.getPageSize();
