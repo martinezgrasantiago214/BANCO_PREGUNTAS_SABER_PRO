@@ -2,6 +2,7 @@ package co.unicauca.saberpro.question.application;
 
 import co.unicauca.saberpro.common.contract.EvaluationVerdict;
 import co.unicauca.saberpro.common.contract.QuestionStatus;
+import co.unicauca.saberpro.common.events.QuestionCreatedEvent;
 import co.unicauca.saberpro.common.events.QuestionEvaluatedEvent;
 import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.common.web.ConflictException;
@@ -17,6 +18,7 @@ import co.unicauca.saberpro.question.domain.factory.QuestionFactory;
 import co.unicauca.saberpro.question.domain.factory.QuestionFactoryRegistry;
 import co.unicauca.saberpro.common.events.DomainEventBus;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -43,16 +45,39 @@ public class QuestionApplicationService {
     }
 
     /**
-     * HU01: crea una pregunta en estado Borrador.
+     * HU01: crea una pregunta en estado Borrador (PSP-16, PSP-17, PSP-18).
      *
-     * TODO(PSP-16, PSP-17, PSP-18):
-     *  1. Elegir la fabrica con factories.forType(request.getType()); si no hay, BusinessException.
-     *  2. factory.create(request): aplica la validacion estructural (PSP-17) y construye la pregunta.
-     *  3. Guardar con repository.save(...) (PSP-18).
-     *  4. Publicar new QuestionCreatedEvent(...) en eventBus.
+     * <ol>
+     *   <li>Normaliza lo que envio el autor (espacios, respuesta correcta
+     *       escrita igual que su distractor).</li>
+     *   <li>Elige la fabrica del tipo (Factory Method). Si no se indica tipo,
+     *       el API asume seleccion multiple.</li>
+     *   <li>La fabrica aplica la validacion estructural completa (PSP-17): 4
+     *       distractores no vacios ni repetidos, respuesta correcta entre
+     *       ellos, contenido, clasificacion y metadatos. Si algo falla, lanza
+     *       QuestionValidationException con todos los errores (400) y no se
+     *       guarda nada.</li>
+     *   <li>Construye la pregunta con el Builder; nace en Borrador.</li>
+     *   <li>La guarda (PSP-18) y publica QuestionCreatedEvent (question.created)
+     *       en el bus de eventos, que la reenvia a RabbitMQ.</li>
+     * </ol>
      */
     public Question create(QuestionRequest request) {
-        throw new PendingIssueException("PSP-18", "crear y almacenar preguntas (HU01)");
+        if (request == null) {
+            throw new BusinessException("Debe enviar los datos de la pregunta.");
+        }
+        QuestionRequest data = request.normalized();
+        QuestionFactory factory = factories.forType(data.getType())
+                .orElseThrow(() -> new BusinessException("Tipo de pregunta no soportado: " + data.getType()
+                        + ". Tipos disponibles: " + factories.all().stream().map(QuestionFactory::getType).toList()));
+
+        Question question = factory.create(data);
+        if (!repository.save(question)) {
+            throw new IllegalStateException("No fue posible guardar la pregunta en la base de datos.");
+        }
+        eventBus.publish(new QuestionCreatedEvent(question.getId(), question.getAuthorLogin(),
+                question.getDirectQuestion(), question.getTopic(), Instant.now()));
+        return question;
     }
 
     /** Consulta una pregunta por su id (la usan el autor para editar y el revisor para leerla). */
@@ -109,10 +134,11 @@ public class QuestionApplicationService {
                     + current.getStatus().getLabel() + ".");
         }
 
-        QuestionRequest data = new QuestionRequest(current.getType(), request.getContext(),
-                request.getDirectQuestion(), request.getDistractors(), request.getCorrectAnswer(),
-                request.getJustification(), request.getBibliography(), request.getCompetence(),
-                request.getTopic(), request.getSubtopic(), request.getDifficultyLevel(), current.getAuthorLogin());
+        QuestionRequest clean = request.normalized();
+        QuestionRequest data = new QuestionRequest(current.getType(), clean.getContext(),
+                clean.getDirectQuestion(), clean.getDistractors(), clean.getCorrectAnswer(),
+                clean.getJustification(), clean.getBibliography(), clean.getCompetence(),
+                clean.getTopic(), clean.getSubtopic(), clean.getDifficultyLevel(), current.getAuthorLogin());
         factories.forType(current.getType())
                 .orElseThrow(() -> new BusinessException("No hay una fabrica para el tipo " + current.getType()))
                 .validate(data);
