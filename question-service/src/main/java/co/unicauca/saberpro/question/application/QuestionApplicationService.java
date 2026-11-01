@@ -4,10 +4,10 @@ import co.unicauca.saberpro.common.contract.EvaluationVerdict;
 import co.unicauca.saberpro.common.contract.QuestionStatus;
 import co.unicauca.saberpro.common.events.QuestionCreatedEvent;
 import co.unicauca.saberpro.common.events.QuestionEvaluatedEvent;
+import co.unicauca.saberpro.common.events.QuestionSubmittedForReviewEvent;
 import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.common.web.ConflictException;
 import co.unicauca.saberpro.common.web.ForbiddenOperationException;
-import co.unicauca.saberpro.common.web.PendingIssueException;
 import co.unicauca.saberpro.common.web.ResourceNotFoundException;
 import co.unicauca.saberpro.question.access.IQuestionRepository;
 import co.unicauca.saberpro.question.access.PagedResult;
@@ -157,13 +157,27 @@ public class QuestionApplicationService {
     }
 
     /**
-     * HU02: Borrador -> Pendiente de revision.
+     * HU02: Borrador -> Pendiente de revision (PSP-21).
      *
-     * TODO(PSP-21): verificar que quien lo pide es el autor, llamar question.submitForReview() (el estado
-     * decide si se puede), repository.update(...) y publicar QuestionSubmittedForReviewEvent en eventBus.
+     * Solo el autor puede enviar su pregunta (si no, 403). La transicion la
+     * decide el patron State: solo un Borrador se puede enviar; en cualquier
+     * otro estado se lanza InvalidStateTransitionException (409). Al guardar
+     * se publica QuestionSubmittedForReviewEvent (question.submitted), que el
+     * review-service consume para que el administrador pueda asignar
+     * revisores (HU04).
      */
-    public Question submitForReview(String id, String authorLogin) {
-        throw new PendingIssueException("PSP-21", "enviar una pregunta a revision (HU02)");
+    public synchronized Question submitForReview(String id, String authorLogin) {
+        Question question = findById(id);
+        if (!question.isAuthoredBy(authorLogin == null ? null : authorLogin.trim())) {
+            throw new ForbiddenOperationException("Solo el autor de la pregunta puede enviarla a revision.");
+        }
+        question.submitForReview();
+        if (!repository.update(question)) {
+            throw new IllegalStateException("No fue posible guardar el cambio de estado de la pregunta " + id + ".");
+        }
+        eventBus.publish(new QuestionSubmittedForReviewEvent(question.getId(), question.getAuthorLogin(),
+                question.getDirectQuestion(), Instant.now()));
+        return question;
     }
 
     /**

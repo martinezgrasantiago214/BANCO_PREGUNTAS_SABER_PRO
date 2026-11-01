@@ -57,8 +57,7 @@ public class MainFrame extends JFrame {
             panel.add(centered(UiTheme.primaryButton("Crear pregunta"),
                     e -> new CreateQuestionFrame(context).setVisible(true)));
             panel.add(Box.createVerticalStrut(12));
-            // HU03 (PSP-24..28): listado con colores, busqueda, filtros, paginacion y edicion.
-            // TODO(PSP-22): agregar en MyQuestionsFrame el boton "Enviar a revision" (HU02).
+            // HU02 y HU03: listado con colores, busqueda, filtros, paginacion, edicion y envio a revision.
             panel.add(centered(UiTheme.primaryButton("Mis preguntas"),
                     e -> new MyQuestionsFrame(context).setVisible(true)));
         } else if (role == Role.ADMINISTRADOR) {
