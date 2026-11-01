@@ -1,0 +1,114 @@
+@startuml clases-patrones
+title Diagrama de clases - Patrones GoF implementados (segundo corte)
+skinparam classAttributeIconSize 0
+skinparam packageStyle rectangle
+hide empty members
+
+package "Creacional: Builder" #FFF8E1 {
+  class Question {
+    -state : QuestionState
+    +{static} builder() : Builder
+    +submitForReview()
+    +approve()
+    +reject()
+    +isEditable() : boolean
+  }
+  class "Question.Builder" as QB {
+    +type(t) : Builder
+    +fromRequest(r) : Builder
+    +status(s) : Builder
+    +build() : Question
+  }
+  Question +-- QB
+}
+
+package "Creacional: Factory Method" #FFF3E0 {
+  abstract class QuestionFactory {
+    +create(request) : Question
+    +validate(request)
+    #{abstract} createQuestion(request) : Question
+    +{abstract} createValidationPipeline() : QuestionPipeline
+  }
+  class MultipleChoiceQuestionFactory
+  class CaseQuestionFactory
+  class MultimediaQuestionFactory
+  class QuestionFactoryRegistry {
+    +forType(type) : Optional<QuestionFactory>
+  }
+  QuestionFactory <|-- MultipleChoiceQuestionFactory
+  QuestionFactory <|-- CaseQuestionFactory
+  QuestionFactory <|-- MultimediaQuestionFactory
+  QuestionFactoryRegistry o-- QuestionFactory : carga por reflexion
+}
+QuestionFactory ..> QB : usa
+
+package "Comportamiento: State" #E8F5E9 {
+  interface QuestionState {
+    +status() : QuestionStatus
+    +submitForReview() : QuestionState
+    +approve() : QuestionState
+    +reject() : QuestionState
+  }
+  abstract class AbstractQuestionState
+  class BorradorState
+  class PendienteRevisionState
+  class AprobadaState
+  class RechazadaState
+  class EliminadaState
+  QuestionState <|.. AbstractQuestionState
+  AbstractQuestionState <|-- BorradorState
+  AbstractQuestionState <|-- PendienteRevisionState
+  AbstractQuestionState <|-- AprobadaState
+  AbstractQuestionState <|-- RechazadaState
+  AbstractQuestionState <|-- EliminadaState
+}
+Question o-- QuestionState
+
+package "Comportamiento: Observer" #E3F2FD {
+  class DomainEventBus {
+    +subscribe(l)
+    +publish(event)
+  }
+  interface DomainEventListener {
+    +onEvent(event)
+  }
+  class EventLogListener
+  class RabbitEventForwarder
+  DomainEventBus o-- DomainEventListener
+  DomainEventListener <|.. EventLogListener
+  DomainEventListener <|.. RabbitEventForwarder
+}
+
+package "Estructural: Adapter" #F3E5F5 {
+  interface NotificationChannel {
+    +send(n) : DeliveryResult
+  }
+  class SmtpEmailChannelAdapter
+  class SmtpMailClient <<adaptee>>
+  class OutboxFileChannel
+  NotificationChannel <|.. SmtpEmailChannelAdapter
+  NotificationChannel <|.. OutboxFileChannel
+  SmtpEmailChannelAdapter --> SmtpMailClient
+}
+
+package "Estructural: Facade" #FCE4EC {
+  class BancoPreguntasFacade {
+    +createQuestion(form)
+    +searchMyQuestions(...)
+    +submitForReview(id)
+    +assignReviewers(id, logins)
+    +evaluate(id, verdict, obs)
+  }
+  interface UserApi
+  interface QuestionApi
+  interface ReviewApi
+  BancoPreguntasFacade --> UserApi
+  BancoPreguntasFacade --> QuestionApi
+  BancoPreguntasFacade --> ReviewApi
+}
+
+' Distribucion en dos filas para que quepa en una pagina
+CaseQuestionFactory -[hidden]down-> DomainEventBus
+MultimediaQuestionFactory -[hidden]down-> NotificationChannel
+MultipleChoiceQuestionFactory -[hidden]down-> BancoPreguntasFacade
+@enduml

@@ -1,31 +1,47 @@
 @startuml c4-contenedores
-!include https://raw.githubusercontent.com/plantuml-stdlib/C4-PlantUML/master/C4_Container.puml
+!include <C4/C4_Container>
 LAYOUT_TOP_DOWN()
-title Diagrama de Contenedores (C4 nivel 2) - Banco de Preguntas Saber PRO
+title C4 nivel 2 - Contenedores: frontend y backend separados por una API REST
 
-Enterprise_Boundary(unicauca, "Universidad del Cauca - Programa de Ingenieria de Sistemas") {
-Person(autor, "Autor de preguntas", "Docente que crea preguntas de seleccion multiple y las envia a revision.")
-Person(admin, "Administrador", "Docente que gestiona usuarios y asigna revisores a preguntas pendientes.")
-Person(revisor, "Revisor", "Docente que recibe por correo las preguntas que se le asignan.")
+Person(usuario, "Autor / Administrador / Revisor", "Docentes de la Universidad del Cauca")
 
 System_Boundary(banco, "Banco de Preguntas Saber PRO") {
-  Container(desktop, "Aplicacion de escritorio", "Java 17, Swing", "Monolito en capas con MVC + Observer. Implementa HU01-HU04: crea y valida preguntas con el microkernel, lista con filtros y paginacion, cambia estados y asigna revisores.")
-  Container(api, "API REST", "Java 17, Spring Boot", "Expone por HTTP/JSON las mismas operaciones del banco reutilizando las capas de servicio, microkernel y acceso a datos.")
-  ContainerDb(db, "Base de datos", "SQLite (archivo bancopreguntas.db)", "Guarda usuarios (con contrasena cifrada) y preguntas con su estado y revisores asignados.")
-}
+  Container(frontend, "Frontend de escritorio", "Java 17, Swing", "MVC + Observer. Solo conoce el API Gateway, a traves de BancoPreguntasFacade.")
+  Container(gateway, "API Gateway", "Spring Cloud Gateway :8080", "Punto unico de entrada. Enruta /api/** a cada microservicio y publica el Swagger UI unificado.")
+
+  Container(users, "user-service", "Spring Boot :8081", "Contexto Gestion de Usuarios: login, registro, roles y consulta de usuarios.")
+  Container(questions, "question-service", "Spring Boot :8082", "Contextos Gestion, Validacion y Ciclo de vida de preguntas (HU01, HU02, HU03).")
+  Container(reviews, "review-service", "Spring Boot :8083", "Contexto Revision por pares: pendientes, asignacion de revisores (HU04) y evaluaciones (HU05).")
+  Container(notifications, "notification-service", "Spring Boot :8084", "Contexto de soporte Notificaciones. Sin estado: escala con varias instancias sobre la misma cola.")
+
+  ContainerQueue(broker, "RabbitMQ", "Exchange topic saberpro.events", "Una cola durable por servicio consumidor; las instancias de un servicio compiten por sus mensajes.")
+
+  ContainerDb(usersDb, "user-service.db", "SQLite", "Usuarios con contrasena PBKDF2")
+  ContainerDb(questionsDb, "question-service.db", "SQLite", "Preguntas y su estado")
+  ContainerDb(reviewsDb, "review-service.db", "SQLite", "Pendientes, asignaciones y evaluaciones")
 }
 
-System_Ext(cliente, "Aplicacion cliente HTTP", "Otro programa (Postman hoy; una web o app movil a futuro) que usa el banco de preguntas a traves de su API REST.")
-System_Ext(correo, "Servidor de correo", "Servicio SMTP existente (por ejemplo Gmail) que entrega los correos a los docentes.")
+System_Ext(smtp, "Servidor de correo", "SMTP / bandeja local")
 
-Rel(autor, desktop, "Crea, lista, edita y envia a revision sus preguntas")
-Rel(admin, desktop, "Asigna revisores y registra usuarios")
-Rel(cliente, api, "Consulta y gestiona preguntas", "JSON/HTTP")
-Rel(desktop, db, "Lee y escribe usuarios y preguntas", "JDBC")
-Rel(api, db, "Lee y escribe usuarios y preguntas", "JDBC")
-Rel(desktop, correo, "Envia correos de asignacion usando", "SMTP/STARTTLS")
-Rel(api, correo, "Envia correos de asignacion usando", "SMTP/STARTTLS")
-Rel(correo, revisor, "Envia correos a")
+Rel(usuario, frontend, "Usa")
+Rel(frontend, gateway, "API REST", "JSON/HTTP")
+Rel(gateway, users, "/api/auth/**, /api/users/**", "HTTP")
+Rel(gateway, questions, "/api/questions/**", "HTTP")
+Rel(gateway, reviews, "/api/reviews/**", "HTTP")
+
+Rel(questions, broker, "Publica question.created, question.submitted", "AMQP")
+Rel(reviews, broker, "Publica review.assigned, review.evaluated", "AMQP")
+Rel(broker, reviews, "question.submitted", "AMQP")
+Rel(broker, questions, "review.evaluated", "AMQP")
+Rel(broker, notifications, "review.assigned, review.evaluated", "AMQP")
+
+Rel(reviews, users, "Valida roles de revisores", "REST")
+Rel(notifications, users, "Resuelve correos de los destinatarios", "REST")
+Rel(notifications, smtp, "Envia correos", "SMTP")
+
+Rel(users, usersDb, "JDBC")
+Rel(questions, questionsDb, "JDBC")
+Rel(reviews, reviewsDb, "JDBC")
 
 SHOW_LEGEND()
 @enduml

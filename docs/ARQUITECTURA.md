@@ -1,216 +1,350 @@
-# Documento de arquitectura - Banco de Preguntas Saber PRO (Primer corte)
+# Portada
 
-Material base para el documento de arquitectura y el video de sustentación.
-Las secciones siguen el orden que pide el enunciado de entregables. Portada,
-pantallazos, tablero del sprint y URLs los completa el equipo.
+**Universidad del Cauca**
+Facultad de Ingeniería Electrónica y Telecomunicaciones
+Programa de Ingeniería de Sistemas
 
----
+**Ingeniería de Software II — Teoría y Laboratorio — 2026.2**
 
-## 1. Introducción
+## Banco de Preguntas Saber PRO
 
-Aplicación de escritorio Java (Swing) para construir y administrar un banco
-de preguntas que apoya la preparación de los estudiantes para las pruebas
-Saber Pro. Es un **monolito en capas** (presentación, dominio/servicio y
-acceso a datos, más una capa transversal) que usa el **micro patrón MVC con
-Observer**. La creación de preguntas se resuelve con un **Microkernel** y un
-pipeline de **Tuberías y Filtros**. Se aplican los principios **SOLID** y
-varios patrones **GoF** para favorecer la modificabilidad.
+### Documento de arquitectura — Segundo corte
 
-En esta primera iteración se implementan las 4 historias de usuario de alto
-valor del primer corte (HU01 a HU04).
+Refactorización a una solución distribuida con **microservicios** y **arquitectura orientada a eventos** para garantizar la **escalabilidad**.
 
----
+**Integrantes**
 
-## 2. Historias de usuario y criterios de aceptación
+| Integrante | Usuario de GitHub |
+|------------|-------------------|
+| Oscar Alejandro Menza Chavisnan | `drax2311` |
+| Santiago Martínez Grajales | `martinezgrasantiago214` |
+| Andrés Felipe Florín Burbano | `andresflorin` |
 
-### HU01 - Crear pregunta de selección múltiple con única respuesta
+**Docentes:** Paola Andrea Bedoya, Pablo Magé, W. Libardo Pantoja, Julio Hurtado
 
-> Yo como **autor de preguntas** necesito crear preguntas de selección
-> múltiple con única respuesta acorde a los principios del Diseño Centrado en
-> Evidencia para alimentar el banco de preguntas Saber Pro.
-
-| # | Criterio de aceptación |
-|---|------------------------|
-| CA1 | **Dado** un autor autenticado, **cuando** abre "Crear pregunta", **entonces** el formulario pide Contexto, Pregunta directa, 4 opciones, Respuesta correcta, Justificación, Bibliografía, Competencia, Tema, Subtema y Nivel de dificultad. |
-| CA2 | **Dado** un formulario completo y consistente, **cuando** pulsa "Guardar", **entonces** la pregunta se guarda en estado **Borrador** y queda asociada al autor. |
-| CA3 | **Dado** un formulario incompleto o inconsistente, **cuando** pulsa "Guardar", **entonces** el sistema aplica la validación estructural, **no** guarda la pregunta y muestra el motivo exacto. |
-| CA4 | La validación estructural rechaza: contexto vacío o pregunta directa demasiado corta; distinto de 4 opciones, opciones vacías o repetidas; clasificación incompleta; respuesta correcta que no esté entre las opciones; justificación o bibliografía vacías. |
-| CA5 | La respuesta correcta solo se puede elegir entre las 4 opciones escritas (lista desplegable). |
-
-*Dónde está:* `CreateQuestionFrame` → `QuestionService.crearPregunta()` →
-`QuestionMicrokernel` → `MultipleChoiceQuestionPlugin` → 5 filtros de
-`microkernel/pipeline/filters`.
-
-### HU02 - Enviar pregunta a revisión (estados con colores)
-
-> Yo como **autor de preguntas** necesito cambiar el estado de mis preguntas
-> de "borrador" a "Pendiente de revisión" para que el administrador les
-> asigne al menos un revisor.
-
-| # | Criterio de aceptación |
-|---|------------------------|
-| CA1 | **Dada** una pregunta propia en **Borrador**, **cuando** el autor la selecciona y pulsa "Enviar a revisión", **entonces** pasa a **Pendiente de revisión**. |
-| CA2 | **Dada** una pregunta que **no** está en Borrador, **cuando** intenta enviarla, **entonces** el sistema lo impide y explica por qué. |
-| CA3 | Un autor **no** puede cambiar el estado de preguntas de otro autor. |
-| CA4 | Cada estado se muestra con **su propio color** en la tabla, y hay una **leyenda** de colores: Borrador (amarillo), Pendiente de revisión (azul), En revisión (morado), Aprobada (verde), Rechazada (rojo), Eliminada (gris). |
-| CA5 | Al cambiar el estado, la vista "Mis preguntas" se actualiza sola (patrón Observer). |
-
-*Dónde está:* `MyQuestionsFrame` → `QuestionService.marcarPendienteDeRevision()`;
-colores en `QuestionState.getColor()`.
-
-### HU03 - Listar mis preguntas con paginación y filtros
-
-> Yo como **autor de preguntas** necesito listar las preguntas que he creado
-> para poder más adelante verlas y editarlas.
-
-| # | Criterio de aceptación |
-|---|------------------------|
-| CA1 | El autor ve **solo sus** preguntas, ordenadas de la más reciente a la más antigua. |
-| CA2 | La lista está **paginada** (5 por página) con botones Anterior/Siguiente y el texto "Página X de Y (N preguntas)"; no se puede avanzar más allá de la última página. |
-| CA3 | Se puede **filtrar** por estado, por tema y por palabra clave (busca en la pregunta y en el contexto), y los filtros se combinan. |
-| CA4 | Con **"Ver detalle"** (o doble clic) se ven todos los campos de la pregunta, con la respuesta correcta marcada. |
-| CA5 | Con **"Editar"** se abre el formulario precargado; solo se editan preguntas en **Borrador**, y los cambios pasan por la misma validación estructural de HU01. |
-
-*Dónde está:* `MyQuestionsFrame` → `QuestionService.listarMisPreguntas()` /
-`actualizarPregunta()` → `SQLiteQuestionRepository.search()`.
-
-### HU04 - Asignar revisores y notificar por correo
-
-> Yo como **administrador** necesito asignar al menos un revisor de las
-> preguntas en estado "Pendiente de revisión" para que las preguntas sean
-> revisadas por otros docentes.
-
-| # | Criterio de aceptación |
-|---|------------------------|
-| CA1 | El administrador ve **solo** las preguntas en estado **Pendiente de revisión**. |
-| CA2 | Puede seleccionar **uno o varios** revisores; si no selecciona ninguno, el sistema no permite asignar. |
-| CA3 | Al asignar, la pregunta pasa a **En revisión** y guarda los revisores asignados. |
-| CA4 | El sistema **envía un correo** a cada revisor asignado. Si no hay servidor de correo configurado, el correo queda registrado en la bandeja local `~/BancoPreguntasSaberPro/outbox/`. |
-| CA5 | El administrador ve, para cada revisor, si el correo se **envió** o se **simuló**. |
-
-*Dónde está:* `AssignReviewersFrame` → `QuestionService.asignarRevisores()` →
-`SmtpEmailService` (SMTP con STARTTLS/SSL, solo JDK).
+Popayán, noviembre de 2026
 
 ---
 
-## 3. Prototipos y test de usabilidad
+# 1. Introducción
 
-**Prototipos:** pegar un pantallazo de cada ventana (Login, Menú, Crear
-pregunta, Mis preguntas con la leyenda de colores, Detalle, Asignar
-revisores). Si se hicieron bocetos antes de programar, mostrarlos junto al
-pantallazo final.
+El **Banco de Preguntas Saber PRO** permite a los docentes construir preguntas de selección múltiple con única respuesta, según los principios del Diseño Centrado en Evidencia, y someterlas a una revisión por pares antes de que entren al banco.
 
-**Test de usabilidad (propuesta):** pedir a 3-5 compañeros que hagan estas
-tareas sin ayuda y registrar tiempo, errores y comentarios.
+En el **primer corte** el sistema era un **monolito de escritorio en capas** (Java Swing, MVC con Observer, Microkernel y Tuberías y Filtros). El atributo de calidad principal era la **modificabilidad**. Ese documento se conserva en [`docs/primer-corte/`](primer-corte/ARQUITECTURA-primer-corte.md).
 
-| Tarea | Éxito si... | Tiempo | Errores | Comentarios |
-|-------|-------------|--------|---------|-------------|
-| T1. Iniciar sesión como autor1 y crear una pregunta completa | Aparece "Pregunta creada" | | | |
-| T2. Intentar guardar una pregunta sin bibliografía | Entiende el mensaje de error | | | |
-| T3. Encontrar sus preguntas del tema "X" | Usa el filtro de tema | | | |
-| T4. Editar una pregunta en borrador | Guarda el cambio | | | |
-| T5. Enviar una pregunta a revisión e identificar su nuevo estado por el color | Reconoce el azul | | | |
-| T6. Como admin, asignar dos revisores | Ve el mensaje de correos | | | |
+En este **segundo corte** el sistema se refactoriza a una **solución distribuida de microservicios orientada a eventos**. El atributo de calidad principal pasa a ser la **escalabilidad**:
 
-Al final, cada participante califica de 1 a 5: facilidad de uso, claridad
-de los mensajes y utilidad de los colores. Reportar el promedio y 2-3
-mejoras identificadas.
+- El **frontend** (Swing) queda **separado del backend** y se comunica únicamente por una **API REST** a través de un **API Gateway**.
+- El backend se divide en **cuatro microservicios**, uno por contexto delimitado. Cada uno tiene **su propia base de datos**.
+- Los servicios se avisan los cambios con **eventos en RabbitMQ**. Así ninguno espera a otro para responder, y los que más trabajo reciben se pueden replicar.
+
+Se mantiene lo que funcionó en el primer corte (reglas de negocio, validación estructural, estados con colores, cifrado de contraseñas). Además se aplican **6 patrones GoF**: 2 creacionales, 2 estructurales y 2 de comportamiento.
+
+Este documento presenta:
+
+1. las historias de usuario de la iteración con sus criterios de aceptación,
+2. la planificación del Sprint 2,
+3. el escenario de calidad de escalabilidad,
+4. la arquitectura en el modelo C4 y en UML,
+5. el diseño de contextos delimitados,
+6. los patrones de diseño implementados y las pruebas automatizadas.
 
 ---
 
-## 4. Atributos de calidad de la iteración
+# 2. Historias de usuario del segundo corte
 
-| Atributo | Por qué es relevante | Cómo se atiende |
-|----------|----------------------|-----------------|
-| **Modificabilidad** (principal) | Se esperan nuevos tipos de pregunta, reglas de validación y cambios de almacenamiento. | Microkernel con plugins por Reflexión, pipeline de filtros, interfaces inyectadas (DIP). |
-| **Usabilidad** | Los docentes deben ver el estado de un vistazo y encontrar sus preguntas. | Colores por estado, leyenda, paginación, filtros, mensajes de error claros. |
-| **Seguridad** | Hay usuarios con roles y contraseñas. | Contraseñas cifradas con PBKDF2 y sal; política de contraseñas; menú según rol. |
-| **Confiabilidad** | Guardar preguntas no debe fallar en silencio. | SQLite en modo WAL con `busy_timeout`; errores visibles; el correo cae a la bandeja local si SMTP falla. |
-| **Testeabilidad** | La rúbrica exige pruebas del dominio. | Servicios con dependencias inyectadas y dobles en memoria para las pruebas. |
+Las cinco historias se implementaron dentro de la arquitectura de microservicios. HU05 es la historia nueva de esta iteración. Los criterios de aceptación siguen el formato *Dado / Cuando / Entonces*.
 
-### Escenario de calidad de modificabilidad
+| HU | Jira | Historia | Microservicio(s) | API principal (vía gateway) |
+|----|------|--------------------------|------------------------|----------------------------------|
+| HU01 | PSP-6 | Crear preguntas | question-service | `POST /api/questions` |
+| HU02 | PSP-8 | Cambiar el estado a Pendiente de revisión | question-service → review-service | `PATCH /api/questions/{id}/submit-review` |
+| HU03 | PSP-9 | Listar, buscar, filtrar y editar mis preguntas | question-service | `GET /api/questions`, `PUT /api/questions/{id}` |
+| HU04 | PSP-11 | Asignar revisores y notificar | review-service → notification-service | `POST /api/reviews/assignments` |
+| HU05 | PSP-44 | Listar y evaluar preguntas asignadas (**nueva**) | review-service → question-service, notification-service | `GET /api/reviews/assignments`, `POST /api/reviews/evaluations` |
+
+## HU01 — Crear preguntas (autor)
+
+> *Yo como autor de preguntas necesito crear preguntas de selección múltiple con única respuesta acorde a los principios del Diseño Centrado en Evidencia, para alimentar el banco de preguntas Saber PRO.*
+
+| # | Criterio de aceptación |
+|---|------------------------|
+| CA1 | **Dado** un autor autenticado, **cuando** abre "Crear pregunta", **entonces** registra contexto, pregunta directa, cuatro opciones, respuesta correcta, justificación, bibliografía, competencia, tema, subtema y nivel de dificultad. |
+| CA2 | **Dada** una pregunta completa y consistente, **cuando** la guarda, **entonces** queda almacenada en estado **Borrador**, asociada al autor. Se responde 201 y se publica el evento `question.created`. |
+| CA3 | **Dada** una pregunta inválida, **cuando** la guarda, **entonces** el sistema aplica la **validación estructural**, no la guarda y responde **400 con todos los errores juntos**, que el formulario muestra como lista. |
+| CA4 | La validación rechaza: contexto vacío; pregunta directa de menos de 10 caracteres; un número de opciones distinto de 4; opciones vacías o repetidas (sin distinguir mayúsculas ni espacios); respuesta correcta que no sea una de las opciones; clasificación incompleta; justificación, bibliografía o autor vacíos. |
+| CA5 | La respuesta correcta se elige entre las opciones escritas y se guarda escrita igual que su opción. |
+
+## HU02 — Cambiar el estado de la pregunta (autor)
+
+> *Yo como autor de preguntas necesito cambiar el estado de mis preguntas de "Borrador" a "Pendiente de revisión" para que el administrador les asigne al menos un revisor.*
+
+| # | Criterio de aceptación |
+|---|------------------------|
+| CA1 | **Borrador** es el estado inicial de toda pregunta. |
+| CA2 | **Dada** una pregunta propia en Borrador, **cuando** el autor pulsa "Enviar a revisión" y confirma, **entonces** pasa a **Pendiente de revisión** y se publica `question.submitted`. El review-service la registra como pendiente de asignar. |
+| CA3 | **Dado** un usuario que no es el autor, **cuando** intenta enviarla, **entonces** se responde **403**. |
+| CA4 | **Dada** una pregunta que no está en Borrador, **cuando** se intenta enviar, **entonces** el patrón State lo impide y se responde **409** con el motivo. |
+| CA5 | Cada estado se ve con su color, con una leyenda: Borrador (amarillo), Pendiente de revisión (azul), Aprobada (verde), Rechazada (rojo). La tabla se refresca sola (Observer). |
+
+## HU03 — Listar las preguntas creadas (autor)
+
+> *Yo como autor de preguntas necesito listar las preguntas que he creado para poder más adelante verlas y editarlas.*
+
+| # | Criterio de aceptación |
+|---|------------------------|
+| CA1 | El autor ve **solo sus** preguntas, de la más reciente a la más antigua, con el estado en color. |
+| CA2 | Puede **buscar** por palabra clave en el enunciado, el contexto y el tema. |
+| CA3 | Puede **filtrar** por estado y por tema, combinar los filtros con la búsqueda y limpiarlos. Si no hay resultados se muestra un mensaje. |
+| CA4 | El listado está **paginado** (5, 10 o 20 por página; máximo 50 en el API), con "Página X de Y" y los botones desactivados en los extremos. |
+| CA5 | Puede ver el **detalle** completo, con la respuesta correcta marcada. |
+| CA6 | Puede **editar** solo sus preguntas en **Borrador**. Si no es el autor, se responde 403; si no está en Borrador, 409. Los cambios pasan por la misma validación de HU01. |
+
+## HU04 — Asignar revisores (administrador)
+
+> *Yo como administrador necesito asignar revisores (entre 1 y 3) de las preguntas en estado "Pendiente de revisión" para que las preguntas sean revisadas por otros docentes.*
+
+| # | Criterio de aceptación |
+|---|------------------------|
+| CA1 | El administrador ve las preguntas en estado **Pendiente de revisión**, que el review-service conoce por el evento `question.submitted`. |
+| CA2 | Selecciona **entre 1 y 3** revisores distintos que existan y tengan rol Revisor; fuera de ese rango se responde 400. |
+| CA3 | La asignación queda registrada en el review-service y se publica `review.assigned`. |
+| CA4 | El notification-service **envía un correo** a cada revisor asignado. Si no hay SMTP configurado, el correo queda en la bandeja local. |
+
+## HU05 — Listar y evaluar preguntas asignadas (revisor) — *nueva*
+
+> *Yo como revisor de preguntas necesito listar las preguntas que me han sido asignadas por el administrador para poder leerlas, dejar la evaluación y cambiar el estado a Aprobada/Rechazada.*
+
+| # | Criterio de aceptación |
+|---|------------------------|
+| CA1 | El revisor ve **solo** las preguntas que le asignaron. |
+| CA2 | Puede abrir una pregunta y leer todo su contenido: contexto, pregunta directa, opciones, respuesta correcta, justificación, bibliografía y clasificación. |
+| CA3 | Registra su evaluación con veredicto **Aprobada** o **Rechazada**. Al rechazar, las **observaciones** son obligatorias (máximo 2000 caracteres). |
+| CA4 | Solo se evalúa una pregunta **asignada al revisor** y en **Pendiente de revisión**. El primer revisor asignado que evalúa decide el estado. |
+| CA5 | Se publica `review.evaluated`: el question-service cambia el estado (patrón State) y el notification-service **notifica al autor y al administrador**. |
+| CA6 | El autor lee las observaciones en el detalle de su pregunta. Los estados se ven con colores, igual que en el resto del sistema. |
+
+---
+
+# 3. Planificación del Sprint 2
+
+**Sprint 2** en Jira (proyecto *Pruebas Saber Pro*, PSP), del **9 al 30 de octubre de 2026**. Objetivo: *completar las historias de usuario listadas en este sprint.*
+
+> **[Pegar aquí el pantallazo del tablero del Sprint 2 en Jira]**
+
+Historias del sprint, tomadas de Jira:
+
+| Historia | Resumen | Responsable | Subtareas | Estado |
+|----------|---------|-------------|-----------|--------|
+| PSP-6 | HU01 Crear preguntas | Oscar Menza | PSP-14 a PSP-19 | Listo |
+| PSP-8 | HU02 Cambiar estado de la pregunta | Santiago Martínez | PSP-20 a PSP-23 | Listo |
+| PSP-9 | HU03 Listar preguntas creadas | Santiago Martínez | PSP-24 a PSP-29 | Listo |
+| PSP-11 | HU04 Asignar revisores | Andrés Florín | PSP-30 a PSP-35 | Listo |
+| PSP-44 | HU05 Listar y evaluar preguntas asignadas | Oscar Menza | PSP-45 a PSP-50 | Listo |
+
+Cada subtarea de Jira tiene un issue espejo en GitHub. Los pull requests los cierran con `Closes #N`, así el tablero y el repositorio quedan sincronizados.
+
+---
+
+# 4. Escenario de calidad: escalabilidad
+
+**Contexto.** Durante las convocatorias, muchos docentes envían preguntas a revisión al mismo tiempo. Cada envío desencadena una cadena de trabajo: el review-service registra la pregunta, el administrador asigna revisores y se envían correos a cada revisor; luego cada evaluación genera correos al autor y al administrador. Enviar un correo por SMTP es la operación más lenta del sistema (cientos de milisegundos a varios segundos). En el monolito del primer corte, la ventana del administrador quedaba bloqueada mientras se enviaban los correos.
 
 | Parte | Descripción |
 |-------|-------------|
-| **Fuente** | Equipo de desarrollo. |
-| **Estímulo** | Se solicita un nuevo tipo de pregunta (por ejemplo, "pregunta con imagen") con reglas de validación propias. |
-| **Artefacto** | Microkernel de preguntas (`QuestionMicrokernel`, plugins y pipeline). |
-| **Entorno** | Tiempo de desarrollo, con el sistema ya en funcionamiento. |
-| **Respuesta** | Se crea una clase que implementa `QuestionPlugin` (con su propio pipeline, reutilizando filtros existentes o agregando uno nuevo) y se registra en `plugins.properties`. El núcleo, los servicios y las demás capas **no se modifican**. |
-| **Medición de la respuesta** | 0 líneas modificadas en `QuestionMicrokernel` y `QuestionService`; 1 clase nueva + 1 línea en `plugins.properties`; menos de 4 horas de trabajo; todas las pruebas existentes siguen pasando. |
-| **Resultado esperado** | El nuevo tipo queda disponible sin riesgo de romper los tipos existentes. Ya se demostró con `CaseQuestionPlugin` y `MultimediaQuestionPlugin`, agregados sin tocar el núcleo. |
+| **Fuente del estímulo** | Administradores y revisores trabajando a la vez durante una convocatoria. |
+| **Estímulo** | Pico de **500 asignaciones de revisores en 10 minutos** (≈ 1 por segundo), cada una con hasta 3 revisores. Eso son hasta **1.500 correos**, más los de las evaluaciones. |
+| **Artefacto** | notification-service y la cola `notification-service.reviewers-assigned` en RabbitMQ. También review-service, que publica los eventos. |
+| **Entorno** | Operación normal, con todos los servicios desplegados con `docker compose`. |
+| **Respuesta** | La API responde la asignación **sin esperar a que se envíen los correos**: review-service guarda y publica `review.assigned`. Los correos se procesan de forma asíncrona desde la cola. Si la cola crece, el operador agrega réplicas: `docker compose up --scale notification-service=3`. Las réplicas se conectan a la **misma cola** y **compiten por los mensajes** (*competing consumers*), sin cambiar código ni reiniciar los demás servicios. La cola es durable, así que **ningún mensaje se pierde** mientras tanto. |
+| **Medida de la respuesta** | (1) `POST /api/reviews/assignments` responde en menos de **500 ms** (p95) durante el pico, sin importar cuántos correos haya pendientes. (2) El tiempo en vaciar la cola baja casi en proporción al número de réplicas: con 3 réplicas, **≈ 1/3** del tiempo que con 1. (3) **0 mensajes perdidos**: todos los correos quedan entregados o en la bandeja de respaldo. |
+| **Resultado esperado** | El sistema absorbe el pico sin bloquear a los usuarios, y la capacidad de notificación crece al agregar réplicas, que es el objetivo de escalabilidad del corte. |
+
+**Cómo se mide en la demo.**
+
+1. Levantar el backend con `docker compose up --build` y abrir la consola de RabbitMQ (`http://localhost:15672`, guest/guest), pestaña *Queues*.
+2. Generar el pico de asignaciones con la colección de Postman (*Runner* con iteraciones) o un script. Medir el tiempo de respuesta de `POST /api/reviews/assignments` y observar cuántos mensajes se acumulan en `notification-service.reviewers-assigned`.
+3. Repetir con `docker compose up --scale notification-service=3` y comparar cuánto tarda la cola en volver a 0. En la consola se ven 3 *consumers* en la cola.
+
+**Tácticas de arquitectura que lo hacen posible.**
+
+| Táctica | Cómo se aplica |
+|---------|----------------|
+| Comunicación asíncrona | Eventos en RabbitMQ (exchange *topic* `saberpro.events`). Quien publica no espera a quien consume. |
+| Consumidores competidores | Una cola durable por servicio consumidor; las réplicas de un servicio comparten su cola. |
+| Servicios sin estado | notification-service no guarda nada propio; por eso escala con solo agregar instancias. |
+| Base de datos por servicio | Ningún servicio lee la base de otro; se escalan y despliegan por separado. |
+| Proyección local | review-service guarda su propia copia de la pregunta pendiente (`PendingQuestion`), tomada del evento. Funciona aunque question-service esté caído. |
+| Consumidores idempotentes | Aplicar dos veces el mismo veredicto no cambia nada; RabbitMQ puede entregar un mensaje más de una vez. |
+| Punto único de entrada | El API Gateway oculta cuántas instancias hay detrás. |
+| Respaldo ante fallos | Si SMTP falla, el correo queda en la bandeja de salida y no se pierde. |
 
 ---
 
-## 5. Arquitectura y diseño (modelo C4 + UML)
+# 5. Arquitectura y diseño (modelo C4 y UML)
 
-Los diagramas están en `docs/diagramas/`: el `.puml` es el fuente (PlantUML con
-C4-PlantUML) y el `.png` la imagen lista para el documento.
+Los diagramas están en [`docs/diagramas/`](diagramas). El `.puml` es la fuente (PlantUML con la librería C4) y el `.png` es la imagen.
 
-| Diagrama | Archivo | Qué muestra |
-|----------|---------|-------------|
-| C4 nivel 1 - Contexto | `c4-contexto.png` | Actores (autor, administrador, revisor), el sistema y el servidor de correo. |
-| C4 nivel 2 - Contenedores | `c4-contenedores.png` | Aplicación de escritorio (Swing), API REST (Spring Boot), base de datos SQLite y servidor SMTP. |
-| C4 nivel 3 - Componentes | `c4-componentes.png` | Dentro de la app de escritorio: vistas, servicios, microkernel, plugins, pipeline, repositorios y correo. |
-| UML - Clases | `clases.png` | Microkernel + Tuberías y Filtros, y el servicio con Observer e interfaces inyectadas. |
+## 5.1 Nivel 1 — Contexto
 
-### Capas
+Tres tipos de usuario (autor, administrador y revisor) usan el sistema, que se apoya en un servidor de correo externo.
 
+![C4 nivel 1 — Contexto](diagramas/c4-contexto.png)
+
+## 5.2 Nivel 2 — Contenedores: frontend y backend separados por una API REST
+
+- El **frontend de escritorio** (Swing) solo conoce el **API Gateway** (`:8080`), a través de la fachada `BancoPreguntasFacade`.
+- El gateway enruta `/api/**` a cada microservicio y publica un **Swagger UI unificado** en `http://localhost:8080/swagger-ui.html`, con un selector por servicio.
+- Los microservicios se avisan los cambios por **RabbitMQ**, y cada uno tiene su **propia base de datos SQLite**.
+
+![C4 nivel 2 — Contenedores](diagramas/c4-contenedores.png)
+
+| Contenedor | Puerto | Responsabilidad | Publica | Consume |
+|----------------|----------|---------------------------|--------------------|--------------------|
+| frontend | — | Pantallas Swing por rol (MVC + Observer) | — | — |
+| api-gateway | 8080 | Enrutamiento y Swagger unificado | — | — |
+| user-service | 8081 | Login, registro, roles, consulta de usuarios | — | — |
+| question-service | 8082 | HU01, HU02, HU03 y cambio de estado de HU05 | `question.created`, `question.submitted` | `review.evaluated` |
+| review-service | 8083 | Pendientes, HU04 y HU05 | `review.assigned`, `review.evaluated` | `question.submitted` |
+| notification-service | 8084 | Correos de HU04 y HU05 | — | `review.assigned`, `review.evaluated` |
+| RabbitMQ | 5672 / 15672 | Broker de eventos | — | — |
+
+## 5.3 Nivel 3 — Componentes
+
+Cada microservicio se organiza en paquetes con responsabilidades separadas:
+
+- `web`: controladores REST y DTOs.
+- `messaging`: consumidores AMQP.
+- `application`: casos de uso, sin dependencia de Spring.
+- `domain`: entidades, reglas y patrones.
+- `access`: repositorios detrás de interfaces.
+- `config`: la clase que arma las piezas (inyección de dependencias).
+
+**question-service:**
+
+![C4 nivel 3 — Componentes de question-service](diagramas/c4-componentes-question.png)
+
+**review-service y notification-service:**
+
+![C4 nivel 3 — Componentes de review-service y notification-service](diagramas/c4-componentes-review.png)
+
+## 5.4 Vista dinámica (UML de secuencia): de HU01 a HU05
+
+Muestra qué partes del flujo son **síncronas** (REST a través del gateway) y cuáles son **asíncronas** (eventos en RabbitMQ).
+
+![Secuencia de punta a punta](diagramas/secuencia.png)
+
+## 5.5 Frontend
+
+El paquete `frontend` aplica el **micro patrón MVC**:
+
+- **Vista:** las pantallas Swing de `ui` (`CreateQuestionFrame`, `MyQuestionsFrame`, `AssignReviewersFrame`, `AssignedQuestionsFrame`, `EvaluationDialog`, entre otras).
+- **Controlador:** la fachada `BancoPreguntasFacade`.
+- **Modelo:** los DTOs de `model`, espejo del JSON del API.
+
+Cuando una acción cambia preguntas, la fachada notifica a las pantallas suscritas (patrón Observer) y estas se refrescan solas.
+
+---
+
+# 6. Diseño de contextos delimitados (bounded contexts)
+
+Se tomó como base la Figura 1 del enunciado y se ajustó al alcance de esta iteración.
+
+![Contextos delimitados](diagramas/contextos-delimitados.png)
+
+| Contexto (Figura 1) | Decisión | Microservicio |
+|------------------------------|--------------------------|------------------------------|
+| Gestión de Usuarios | Se implementa | user-service |
+| Gestión de Preguntas | Se implementa | question-service |
+| Validación de Preguntas | **Se fusiona** con Gestión de Preguntas | question-service (Tuberías y Filtros + Factory Method) |
+| Ciclo de Vida de Preguntas | **Se fusiona** con Gestión de Preguntas | question-service (patrón State) |
+| Revisión por Pares | Se implementa | review-service |
+| — | **Contexto nuevo de soporte:** Notificaciones | notification-service |
+| Simulacros, Seguimiento Académico, Administración, Trazabilidad | Iteraciones futuras (no hay historias en este corte) | — |
+
+**Por qué se fusionan contextos.**
+
+- **Validación.** HU01 exige validar al momento de grabar, es decir, de forma síncrona. Un servicio aparte solo sumaría latencia y otro punto de falla. Además, la validación es cálculo puro y escala junto con question-service.
+- **Ciclo de vida.** El estado es parte de la pregunta: por ejemplo, solo se edita en Borrador. Separarlo obligaría a coordinar dos servicios para operaciones que deben ser atómicas.
+
+**Relaciones entre contextos.**
+
+- **Eventos.** question-service y review-service se integran solo por eventos. Los contratos (eventos y enums) viven en el módulo `common`, que funciona como *Published Language*.
+- **REST.** review-service y notification-service consultan a user-service por REST, en una relación *cliente/proveedor*: el primero para validar roles, el segundo para resolver correos.
+- **Contextos futuros.** Trazabilidad o Seguimiento Académico podrán suscribirse a los mismos eventos, por ejemplo a `question.created`, que ya se publica, sin modificar los servicios existentes.
+
+---
+
+# 7. Patrones de diseño implementados
+
+Se implementan **6 patrones GoF**, 2 de cada tipo. El diagrama de clases muestra cómo se relacionan:
+
+![Patrones GoF — diagrama de clases](diagramas/clases-patrones.png)
+
+| Patrón | Tipo | Problema que resuelve | Cómo se implementó |
+|----------------|----------------|------------------------------|------------------------------------------|
+| **Builder** | Creacional | Una pregunta tiene 15 atributos. Se construye al crearla, al editarla y al leerla de la base de datos, y un constructor con tantos parámetros sería ilegible y propenso a errores. | `Question.builder()…fromRequest(r).status(s).build()` en `question-service/.../domain/Question.java`. `build()` exige el tipo y, si no se indica estado, la pregunta nace en Borrador. |
+| **Factory Method** | Creacional | Hay varios tipos de pregunta (selección múltiple, caso, multimedia), cada uno con su validación, y el caso de uso no debe hacer `new` de cada uno. | `QuestionFactory` define `create()` (valida y construye) y dos métodos fábrica: `createQuestion()` y `createValidationPipeline()`. Hay 3 subclases. `QuestionFactoryRegistry` las carga por reflexión desde `question-factories.properties`, como el microkernel del primer corte. |
+| **Adapter** | Estructural | Hay que enviar correos sin que la aplicación dependa de la librería de correo, y poder cambiar a una bandeja local. | `NotificationChannel` es la interfaz objetivo. `SmtpEmailChannelAdapter` adapta `SmtpMailClient` y `OutboxFileChannel` adapta el sistema de archivos. `NotificationService` usa el primero y cae al segundo si falla. |
+| **Facade** | Estructural | Sin ella, el frontend tendría que conocer 3 servicios, sus rutas, el JSON y la sesión del usuario. | `BancoPreguntasFacade` expone operaciones por caso de uso (`createQuestion`, `searchMyQuestions`, `submitForReview`, `assignReviewers`, `evaluate`…) y oculta los clientes HTTP y el usuario autenticado. |
+| **State** | Comportamiento | Las reglas del ciclo de vida (qué se puede hacer en cada estado) estarían dispersas en `if/switch`. | La interfaz `QuestionState` tiene 5 estados concretos (`BorradorState`, `PendienteRevisionState`, `AprobadaState`, `RechazadaState`, `EliminadaState`). Cada transición devuelve el estado siguiente o lanza `InvalidStateTransitionException` (409). `Question` delega en su estado. |
+| **Observer** | Comportamiento | El servicio que publica un evento no debe saber quién lo escucha, y las pantallas deben refrescarse cuando algo cambia. | En el backend, `DomainEventBus` notifica a sus observadores: `EventLogListener` y `RabbitEventForwarder`, que reenvía el evento a RabbitMQ. En el frontend, `Subject`/`Observer` refresca "Mis preguntas", "Asignar revisores" y "Preguntas asignadas". |
+
+**Otros patrones de arquitectura y diseño:** API Gateway, Base de datos por servicio, Consumidores competidores, Repositorio, Tuberías y Filtros (`QuestionPipeline` con 5 filtros), DTO y MVC.
+
+## Principios SOLID
+
+| Principio | Cómo se aplica |
+|-----------|----------------|
+| **SRP** | El controlador, el servicio de aplicación, las entidades y los repositorios tienen responsabilidades separadas. Cada filtro de validación revisa una sola regla. |
+| **OCP** | Nuevos tipos de pregunta, estados, filtros o canales de notificación se agregan con clases nuevas, sin modificar las existentes. Nuevos consumidores de eventos se agregan sin tocar a quien publica. |
+| **LSP** | Cualquier `QuestionState`, `QuestionFactory`, `NotificationChannel` o repositorio es intercambiable. Las pruebas usan repositorios con bases temporales y buses de eventos de prueba. |
+| **ISP** | Interfaces pequeñas: `QuestionFilter` (2 métodos), `DomainEventListener` (1), `NotificationChannel`, `UserDirectory`, `UserRoleDirectory`. |
+| **DIP** | Los servicios de aplicación reciben interfaces por constructor (`IQuestionRepository`, `DomainEventBus`, `NotificationChannel`). Las clases `*ServiceConfig` arman las piezas concretas. |
+
+---
+
+# 8. Pruebas unitarias automatizadas
+
+Se ejecutan con `mvn test`. Hay **207 pruebas** JUnit 5, y todas pasan:
+
+| Módulo | Pruebas | Clases de prueba |
+|----------------|-------|------------------------------------------------------------|
+| common | 15 | `ContractEnumsTest`, `DomainEventBusTest`, `QuestionFieldTest` |
+| user-service | 20 | `UserTest`, `UserServiceTest`, `PasswordSecurityTest` |
+| question-service | 94 | `QuestionBuilderTest`, `QuestionFactoryTest`, `QuestionPipelineTest`, `QuestionStateTest`, `CreateQuestionTest`, `SubmitForReviewTest`, `ListAndEditQuestionsTest`, `QuestionApplicationServiceTest`, `SQLiteQuestionRepositoryTest`, `QuestionControllerHu01Test`, `QuestionControllerHu02Test`, `QuestionControllerHu03Test` |
+| review-service | 42 | `ReviewDomainTest`, `EvaluationPolicyTest`, `ReviewApplicationServiceTest`, `InMemoryReviewRepositoryTest`, `SQLiteReviewRepositoryTest` |
+| notification-service | 17 | `NotificationServiceTest`, `NotificationChannelsTest` |
+| frontend | 19 | `BancoPreguntasFacadeTest`, `ApiClientTest`, `MyQuestionsQueryTest`, `QuestionDetailFormatterTest`, `DialogsTest` |
+
+- **Qué se prueba:** las entidades y reglas del dominio (pregunta, estados, fábricas, filtros, políticas de revisión y evaluación, usuario, contraseñas) y los servicios de aplicación de cada microservicio, con casos válidos e inválidos.
+- **Pruebas del API:** las de controlador verifican los códigos HTTP 200, 201, 400, 403, 404 y 409 y las peticiones 08, 09, 11 y 12 de la colección de Postman.
+- **Sin servicios externos:** las pruebas usan bases SQLite temporales y buses de eventos de prueba, así que no necesitan RabbitMQ ni servidor de correo.
+
+La colección `postman/BancoPreguntas-API.postman_collection.json` recorre el flujo completo a través del gateway.
+
+---
+
+# 9. Cómo ejecutar
+
+```bash
+mvn package -DskipTests
+docker compose up --build                                 # RabbitMQ + 4 microservicios + gateway
+docker compose up --build --scale notification-service=3  # escenario de escalabilidad
+mvn -pl frontend exec:java                                # frontend de escritorio
 ```
-presentation   Vistas Swing (MVC: Vista) + AppContext
-service        QuestionService, UserService (MVC: Controlador), correo, políticas
-domain         Entidades: Question, User, estados, roles (MVC: Modelo)
-access         Repositorios SQLite detrás de interfaces
-infra          Observer / Subject (capa transversal)
-microkernel    Núcleo, plugins y pipeline de validación
-api            API REST (Taller de microservicios)
-```
+
+| Recurso | URL |
+|---------|-----|
+| API Gateway y Swagger UI unificado | http://localhost:8080/swagger-ui.html |
+| Consola de RabbitMQ | http://localhost:15672 (guest / guest) |
+
+Usuarios de prueba: `admin/Admin123!`, `autor1/Autor123!`, `rev1/Revisor123!`, `rev2/Revisor123!`.
 
 ---
 
-## 6. Patrones de diseño y principios SOLID
+# 10. Enlaces
 
-| Patrón | Tipo | Dónde | Para qué en este problema |
-|--------|------|-------|---------------------------|
-| **Observer** | GoF comportamiento | `infra/Subject`, `infra/Observer`, `MyQuestionsFrame` | Cuando cambia una pregunta (se crea, se edita, cambia de estado), la vista "Mis preguntas" se refresca sola sin que el servicio conozca las ventanas. |
-| **MVC** | Micro patrón arquitectónico | `presentation` / `service` / `domain` | Separa lo que se ve (Swing) de la lógica y los datos. |
-| **Strategy** | GoF comportamiento | `IPasswordPolicy` → `DefaultPasswordPolicy`; `IPasswordHasher` → `PBKDF2PasswordHasher`; `IEmailService` → `SmtpEmailService` | Cambiar la política de contraseñas, el algoritmo de cifrado o el medio de notificación sin tocar `UserService` ni `QuestionService`. |
-| **Factory Method + Singleton** | GoF creacional | `QuestionRepositoryFactory`, `UserRepositoryFactory` | Un único punto que decide qué repositorio crear (archivo o memoria). |
-| **Repository** | Patrón de acceso a datos | `IQuestionRepository`, `IUserRepository` | Los servicios no saben que hay SQLite detrás. |
-| **Microkernel (plug-in)** | Arquitectónico | `QuestionMicrokernel` + `plugins.properties` + Reflexión | Agregar tipos de pregunta sin modificar el núcleo. |
-| **Tuberías y Filtros** | Arquitectónico | `QuestionPipeline` + 5 filtros | Validación estructural de HU01 por etapas independientes y reutilizables. |
-| **Adapter** | GoF estructural | `CreateQuestionFrame.SimpleDocListener` | Adapta los 3 métodos de `DocumentListener` a una sola acción. |
-| **DTO** | Patrón de diseño | `QuestionRequest`, `OperationResult`, `PagedResult` | Transportar datos entre capas sin exponer las entidades. |
-
-| Principio | Evidencia |
-|-----------|-----------|
-| **S**RP | `User` solo guarda datos; validar (`IPasswordPolicy`), cifrar (`IPasswordHasher`) y persistir (`IUserRepository`) están en clases distintas. Cada filtro valida una sola cosa. |
-| **O**CP | Nuevos tipos de pregunta y nuevos filtros se agregan sin modificar el núcleo ni el pipeline. |
-| **L**SP | Cualquier `IQuestionRepository` (SQLite o el doble en memoria de las pruebas) funciona igual en `QuestionService`. |
-| **I**SP | Interfaces pequeñas: `Observer` (1 método), `QuestionFilter` (2), `IEmailService`, `IPasswordPolicy`. |
-| **D**IP | `QuestionService` y `UserService` reciben interfaces por constructor; `AppContext` arma las piezas concretas. |
-
----
-
-## 7. Pruebas unitarias automatizadas
-
-Ejecutar con `mvn test` (o desde la pestaña *Testing* de VS Code). 13 clases de
-prueba en `src/test/java`, que cubren todas las entidades y servicios:
-
-| Área | Clases de prueba |
-|------|------------------|
-| Entidades del dominio | `QuestionTest`, `UserTest`, `QuestionRequestTest`, `EnumsTest` |
-| Servicios | `QuestionServiceTest` (HU01-HU04 de punta a punta), `UserServiceTest`, `DefaultPasswordPolicyTest`, `PBKDF2PasswordHasherTest`, `SmtpEmailServiceTest`, `SupportClassesTest` |
-| Microkernel y pipeline | `QuestionMicrokernelTest`, `QuestionPipelineTest` |
-| Transversal | `SubjectTest` (Observer) |
-
-Las pruebas de servicios usan dobles en memoria
-(`testdoubles/InMemory*RepositoryFake`), así no dependen de SQLite.
-
----
-
-## 8. Enlaces
-
-- Video de YouTube: *(completar)*
-- Repositorio Git: *(completar)*
-- Tablero del Sprint 1 (Jira/Trello): *(pantallazo)*
+- **Repositorio Git:** https://github.com/martinezgrasantiago214/BANCO_PREGUNTAS_SABER_PRO
+- **Video de sustentación (YouTube):** **[completar]**
+- **Tablero del Sprint 2 (Jira):** https://ingsoft2asa.atlassian.net (proyecto PSP, Sprint 2)

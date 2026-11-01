@@ -1,0 +1,51 @@
+@startuml secuencia
+title Flujo de punta a punta HU01 -> HU05 (sincrono por REST, asincrono por eventos)
+autonumber
+actor Autor
+actor Administrador as Admin
+actor Revisor
+participant "Frontend\n(Facade)" as FE
+participant "API Gateway" as GW
+participant "question-service" as QS
+queue "RabbitMQ\nsaberpro.events" as MQ
+participant "review-service" as RS
+participant "notification-service" as NS
+participant "user-service" as US
+
+Autor -> FE : Crear pregunta (HU01)
+FE -> GW : POST /api/questions
+GW -> QS : POST /api/questions
+QS -> QS : Fabrica + validacion estructural\n+ Builder (Borrador)
+QS -> MQ : question.created
+QS --> FE : 201 Borrador
+
+Autor -> FE : Enviar a revision (HU02)
+FE -> GW : PATCH /api/questions/{id}/submit-review
+GW -> QS : PATCH ...
+QS -> QS : State: Borrador -> Pendiente
+QS -> MQ : question.submitted
+QS --> FE : 200 Pendiente de revision
+MQ -> RS : question.submitted
+RS -> RS : registra pregunta pendiente
+
+Admin -> FE : Asignar revisores (HU04)
+FE -> GW : POST /api/reviews/assignments
+GW -> RS : POST ...
+RS -> US : valida roles (REST)
+RS -> MQ : review.assigned
+RS --> FE : 201
+MQ -> NS : review.assigned
+NS -> US : correos de los revisores
+NS -> Revisor : correo "pregunta asignada"
+
+Revisor -> FE : Evaluar (HU05)
+FE -> GW : POST /api/reviews/evaluations
+GW -> RS : POST ...
+RS -> MQ : review.evaluated
+RS --> FE : 201
+MQ -> QS : review.evaluated
+QS -> QS : State: Pendiente -> Aprobada/Rechazada
+MQ -> NS : review.evaluated
+NS -> Autor : correo "pregunta evaluada"
+NS -> Admin : correo "pregunta evaluada"
+@enduml
