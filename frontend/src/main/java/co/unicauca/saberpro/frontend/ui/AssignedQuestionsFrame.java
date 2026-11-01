@@ -12,6 +12,8 @@ import javax.swing.border.EmptyBorder;
 import javax.swing.table.AbstractTableModel;
 import javax.swing.table.DefaultTableCellRenderer;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
@@ -66,6 +68,14 @@ public class AssignedQuestionsFrame extends JFrame implements Observer {
         table.getColumnModel().getColumn(AssignmentTableModel.COL_QUESTION).setPreferredWidth(420);
         table.getColumnModel().getColumn(AssignmentTableModel.COL_STATUS).setPreferredWidth(150);
         table.getColumnModel().getColumn(AssignmentTableModel.COL_STATUS).setCellRenderer(new StatusCellRenderer());
+        table.addMouseListener(new MouseAdapter() {
+            @Override
+            public void mouseClicked(MouseEvent e) {
+                if (e.getClickCount() == 2 && table.getSelectedRow() >= 0) {
+                    openDetail();
+                }
+            }
+        });
 
         JScrollPane scroll = new JScrollPane(table);
         JPanel center = new JPanel(new BorderLayout(0, 6));
@@ -92,7 +102,37 @@ public class AssignedQuestionsFrame extends JFrame implements Observer {
         JButton btnReload = UiTheme.secondaryButton("Actualizar");
         btnReload.addActionListener(e -> reload());
         bar.add(btnReload);
+
+        JButton btnDetail = UiTheme.primaryButton("Ver detalle");
+        btnDetail.addActionListener(e -> openDetail());
+        bar.add(btnDetail);
         return bar;
+    }
+
+    /** Fila seleccionada (teniendo en cuenta el ordenamiento de la tabla) o null si no hay ninguna. */
+    private Row selectedRow() {
+        int viewIndex = table.getSelectedRow();
+        if (viewIndex < 0) {
+            JOptionPane.showMessageDialog(this, "Seleccione una pregunta de la lista.", "Preguntas asignadas",
+                    JOptionPane.INFORMATION_MESSAGE);
+            return null;
+        }
+        return model.rowAt(table.convertRowIndexToModel(viewIndex));
+    }
+
+    /** HU05 (PSP-46): abre la pregunta seleccionada en modo solo lectura. */
+    private void openDetail() {
+        Row row = selectedRow();
+        if (row == null) {
+            return;
+        }
+        if (row.question() == null) {
+            JOptionPane.showMessageDialog(this, "No fue posible obtener la pregunta " + row.assignment().questionId()
+                    + " del question-service. Intente actualizar la lista.", "Pregunta no disponible",
+                    JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        new QuestionDetailDialog(this, row.question()).setVisible(true);
     }
 
     /**

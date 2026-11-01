@@ -2,6 +2,7 @@ package co.unicauca.saberpro.frontend.ui;
 
 import java.awt.Color;
 import java.time.Instant;
+import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -23,6 +24,18 @@ public final class Formats {
             return DATE_TIME.format(Instant.parse(isoInstant).atZone(ZoneId.systemDefault()));
         } catch (DateTimeParseException ex) {
             return isoInstant;
+        }
+    }
+
+    /** Fecha local sin zona (p. ej. createdAt = 2026-10-31T16:30:12.5) como "2026-10-31 16:30". */
+    public static String localDateTime(String isoLocal) {
+        if (isoLocal == null || isoLocal.isBlank()) {
+            return "";
+        }
+        try {
+            return DATE_TIME.format(LocalDateTime.parse(isoLocal));
+        } catch (DateTimeParseException ex) {
+            return isoLocal;
         }
     }
 
