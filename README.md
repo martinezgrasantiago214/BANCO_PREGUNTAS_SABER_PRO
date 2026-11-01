@@ -113,10 +113,8 @@ responde **501 Not Implemented** con el issue. Para encontrarlos:
 | PSP-19 | Pruebas de creacion | `question-service/src/test` |
 | PSP-20 | Estados: ya implementados con el patron State; falta usarlos en los casos de uso | `domain/state/` |
 | PSP-21 | Enviar a revision + evento | `QuestionApplicationService.submitForReview` |
-| PSP-22 | Colores por estado en la pantalla (`statusColor` ya viene en el API) | frontend, pantalla "Mis preguntas" |
-| PSP-24 a PSP-27 | Listado, busqueda, filtros y paginacion (el repositorio ya filtra y pagina) | `QuestionApplicationService.search` + pantalla |
-| PSP-28 | Edicion (el formulario ya soporta modo edicion) | `QuestionApplicationService.update` |
-| PSP-23, PSP-29 | Pruebas | `question-service/src/test` |
+| PSP-22 | Boton "Enviar a revision" (los colores por estado y su leyenda ya se ven en "Mis preguntas") | `MyQuestionsFrame` |
+| PSP-23 | Pruebas de HU02 | `question-service/src/test` |
 | PSP-30 | Registrar/listar preguntas pendientes desde el evento | `ReviewApplicationService.registerPendingQuestion / listPendingQuestions` |
 | PSP-31 a PSP-33 | Asignar 1 a 3 revisores (`ReviewPolicy` ya valida) y persistir | `ReviewApplicationService.assignReviewers`, `InMemoryReviewRepository` |
 | PSP-34 | Correo a los revisores | `NotificationService.onReviewersAssigned` |

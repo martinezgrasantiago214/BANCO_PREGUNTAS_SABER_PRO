@@ -7,7 +7,6 @@ import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.common.web.PendingIssueException;
 import co.unicauca.saberpro.common.web.ResourceNotFoundException;
 import co.unicauca.saberpro.question.TestData;
-import co.unicauca.saberpro.question.access.QuestionFilterCriteria;
 import co.unicauca.saberpro.question.access.SQLiteQuestionRepository;
 import co.unicauca.saberpro.question.domain.Question;
 import co.unicauca.saberpro.question.domain.factory.QuestionFactoryRegistry;
@@ -26,7 +25,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Casos de uso del question-service. Las pruebas de los casos de uso
  * pendientes verifican que respondan con su issue de Jira; al implementarlos,
- * reemplacelas por pruebas del comportamiento real (PSP-19, PSP-23, PSP-29, PSP-50).
+ * reemplacelas por pruebas del comportamiento real (PSP-19, PSP-23, PSP-50). HU03 (PSP-29)
+ * se prueba en {@link ListAndEditQuestionsTest}.
  */
 class QuestionApplicationServiceTest {
 
@@ -64,8 +64,6 @@ class QuestionApplicationServiceTest {
     @Test
     void losCasosDeUsoPendientesIndicanSuIssue() {
         assertPending("PSP-18", () -> service.create(TestData.validRequest("MULTIPLE_CHOICE")));
-        assertPending("PSP-24", () -> service.search(new QuestionFilterCriteria()));
-        assertPending("PSP-28", () -> service.update("q-1", TestData.validRequest("MULTIPLE_CHOICE")));
         assertPending("PSP-21", () -> service.submitForReview("q-1", "autor1"));
     }
 
