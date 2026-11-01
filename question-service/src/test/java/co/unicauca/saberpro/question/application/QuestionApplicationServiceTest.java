@@ -64,8 +64,6 @@ class QuestionApplicationServiceTest {
         assertPending("PSP-24", () -> service.search(new QuestionFilterCriteria()));
         assertPending("PSP-28", () -> service.update("q-1", TestData.validRequest("MULTIPLE_CHOICE")));
         assertPending("PSP-21", () -> service.submitForReview("q-1", "autor1"));
-        assertPending("PSP-48", () -> service.applyEvaluation(new QuestionEvaluatedEvent("q-1", "autor1", "rev1",
-                EvaluationVerdict.APROBADA, "Bien", Instant.now())));
     }
 
     private void assertPending(String issue, Runnable call) {
