@@ -70,10 +70,8 @@ public class MainFrame extends JFrame {
             panel.add(centered(UiTheme.primaryButton("Registrar usuario"),
                     e -> new RegisterFrame(context).setVisible(true)));
         } else if (role == Role.REVISOR) {
-            // TODO(PSP-45..48): pantalla "Preguntas asignadas" usando facade.listMyAssignments,
-            //  findQuestion y evaluate.
             panel.add(centered(UiTheme.primaryButton("Preguntas asignadas"),
-                    e -> Dialogs.showPendingScreen(this, "Preguntas asignadas", "PSP-45 a PSP-48")));
+                    e -> new AssignedQuestionsFrame(context).setVisible(true)));
         }
 
         panel.add(Box.createVerticalStrut(24));
