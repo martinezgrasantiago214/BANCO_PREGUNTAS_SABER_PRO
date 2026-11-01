@@ -1,0 +1,45 @@
+@startuml c4-componentes-review
+!include <C4/C4_Component>
+LAYOUT_TOP_DOWN()
+title C4 nivel 3 - Componentes de review-service y notification-service
+
+Container_Ext(gateway, "API Gateway", "Spring Cloud Gateway")
+ContainerQueue_Ext(broker, "RabbitMQ", "saberpro.events")
+Container_Ext(users, "user-service", "REST")
+ContainerDb_Ext(db, "review-service.db", "SQLite")
+System_Ext(smtp, "Servidor de correo", "SMTP")
+
+Container_Boundary(rs, "review-service") {
+  Component(rctrl, "ReviewController", "REST", "GET pending-questions, POST/GET assignments, POST/GET evaluations")
+  Component(rconsumer, "ReviewEventsConsumer", "AMQP", "Consume question.submitted y registra la pregunta pendiente (proyeccion local).")
+  Component(rapp, "ReviewApplicationService", "Aplicacion", "registerPendingQuestion, assignReviewers (HU04), listAssignedTo, evaluate (HU05)")
+  Component(policies, "ReviewPolicy / EvaluationPolicy", "Dominio", "1 a 3 revisores distintos; al rechazar, observaciones obligatorias.")
+  Component(rdir, "UserServiceRoleClient", "Cliente REST", "Valida que cada login sea un revisor activo.")
+  Component(rrepo, "SQLiteReviewRepository", "Acceso a datos", "Pendientes, asignaciones y evaluaciones.")
+}
+
+Container_Boundary(ns, "notification-service") {
+  Component(nconsumer, "NotificationEventsConsumer", "AMQP", "Consume review.assigned y review.evaluated.")
+  Component(napp, "NotificationService", "Aplicacion", "Arma los mensajes y elige destinatarios.")
+  Component(channels, "NotificationChannel", "Adapter", "SmtpEmailChannelAdapter (principal) y OutboxFileChannel (respaldo).")
+  Component(ndir, "UserServiceRestClient", "Cliente REST", "Resuelve el correo de cada destinatario.")
+}
+
+Rel(gateway, rctrl, "JSON/HTTP")
+Rel(broker, rconsumer, "question.submitted")
+Rel(rctrl, rapp, "usa")
+Rel(rconsumer, rapp, "usa")
+Rel(rapp, policies, "valida con")
+Rel(rapp, rdir, "usa")
+Rel(rdir, users, "GET /api/users/{login}")
+Rel(rapp, rrepo, "usa")
+Rel(rrepo, db, "JDBC")
+Rel(rapp, broker, "review.assigned / review.evaluated", "AMQP")
+
+Rel(broker, nconsumer, "review.assigned / review.evaluated")
+Rel(nconsumer, napp, "usa")
+Rel(napp, ndir, "usa")
+Rel(ndir, users, "GET /api/users/{login}")
+Rel(napp, channels, "entrega por")
+Rel(channels, smtp, "SMTP")
+@enduml

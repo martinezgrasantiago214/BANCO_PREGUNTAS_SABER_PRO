@@ -10,6 +10,15 @@ a traves de un **API Gateway**.
 > no existen se pueden consultar alli, por ejemplo:
 > `git show 74ab78d:src/main/java/co/unicauca/saberpro/presentation/MyQuestionsFrame.java`
 
+## Documentacion
+
+- Documento de arquitectura del segundo corte: [`docs/ARQUITECTURA.md`](docs/ARQUITECTURA.md),
+  tambien en [Word](docs/Documento-Arquitectura-Segundo-Corte.docx) y
+  [PDF](docs/Documento-Arquitectura-Segundo-Corte.pdf).
+- Diagramas C4, de contextos delimitados, de secuencia y de clases: [`docs/diagramas/`](docs/diagramas)
+  (fuente PlantUML `.puml` e imagen `.png`).
+- Documentacion del primer corte (monolito): [`docs/primer-corte/`](docs/primer-corte).
+
 ## Arquitectura
 
 ```
