@@ -11,7 +11,7 @@ public class QuestionFilterCriteria {
     private String authorLogin;       // null => no filtra por autor (uso admin)
     private QuestionStatus status;    // null => cualquier estado
     private String topic;             // null/blank => cualquier tema
-    private String keyword;           // busca en pregunta directa / contexto
+    private String keyword;           // busca en pregunta directa / contexto / tema
     private int page = 1;             // 1-based
     private int pageSize = 5;
 

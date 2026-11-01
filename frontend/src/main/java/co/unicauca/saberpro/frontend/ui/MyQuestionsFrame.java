@@ -46,7 +46,7 @@ import java.util.List;
  * <ul>
  *   <li>PSP-24 listado: tabla con las preguntas del autor autenticado, de la
  *       mas reciente a la mas antigua, y el estado con su color (HU02).</li>
- *   <li>PSP-25 busqueda: palabra clave en el enunciado y el contexto.</li>
+ *   <li>PSP-25 busqueda: palabra clave en el enunciado, el contexto y el tema.</li>
  *   <li>PSP-26 filtros: estado y tema.</li>
  *   <li>PSP-27 paginacion: anterior/siguiente y tamano de pagina.</li>
  *   <li>PSP-28 edicion: abre {@link CreateQuestionFrame} en modo edicion.</li>
@@ -155,7 +155,7 @@ public class MyQuestionsFrame extends JFrame implements Observer {
                 cmbStatus.addItem(status);
             }
         }
-        txtKeyword.setToolTipText("Busca en el enunciado y en el contexto de la pregunta.");
+        txtKeyword.setToolTipText("Busca en el enunciado, el contexto y el tema de la pregunta.");
         txtTopic.setToolTipText("Muestra las preguntas cuyo tema contiene este texto.");
 
         filters.add(label("Buscar:"));

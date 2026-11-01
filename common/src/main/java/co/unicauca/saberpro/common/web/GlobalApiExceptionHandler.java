@@ -26,6 +26,16 @@ public class GlobalApiExceptionHandler {
         return build(HttpStatus.NOT_FOUND, List.of(ex.getMessage()), req);
     }
 
+    @ExceptionHandler(ForbiddenOperationException.class)
+    public ResponseEntity<ApiError> handleForbidden(ForbiddenOperationException ex, HttpServletRequest req) {
+        return build(HttpStatus.FORBIDDEN, ex.getMessages(), req);
+    }
+
+    @ExceptionHandler(ConflictException.class)
+    public ResponseEntity<ApiError> handleConflict(ConflictException ex, HttpServletRequest req) {
+        return build(HttpStatus.CONFLICT, ex.getMessages(), req);
+    }
+
     @ExceptionHandler(BusinessException.class)
     public ResponseEntity<ApiError> handleBusiness(BusinessException ex, HttpServletRequest req) {
         return build(HttpStatus.BAD_REQUEST, ex.getMessages(), req);
