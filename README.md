@@ -5,10 +5,8 @@ Refactorizacion del monolito del primer corte a una solucion distribuida con
 **frontend (Java Swing) separado del backend** y comunicado por **API REST**
 a traves de un **API Gateway**.
 
-> El codigo del monolito sigue en el historial de git (commit `74ab78d` y
-> anteriores). Lo reutilizable se migro a los servicios; las pantallas que aun
-> no existen se pueden consultar alli, por ejemplo:
-> `git show 74ab78d:src/main/java/co/unicauca/saberpro/presentation/MyQuestionsFrame.java`
+> El codigo del monolito del primer corte sigue en el historial de git (commit
+> `74ab78d` y anteriores) y su documentacion en [`docs/primer-corte/`](docs/primer-corte).
 
 ## Documentacion
 
@@ -74,7 +72,7 @@ java -jar frontend/target/frontend-2.0.0.jar
 - Sin RabbitMQ los servicios arrancan y el API responde, pero los eventos no
   se entregan (el health de los servicios con eventos aparece `DOWN`).
 - Datos: `~/BancoPreguntasSaberPro/` (`user-service.db`, `question-service.db`,
-  `outbox/`). Usuarios de prueba: `admin/Admin123!`, `autor1/Autor123!`,
+  `review-service.db`, `outbox/`). Usuarios de prueba: `admin/Admin123!`, `autor1/Autor123!`,
   `rev1/Revisor123!`, `rev2/Revisor123!`.
 - Correo real: copiar `notification-service/src/main/resources/mail.properties.example`
   como `mail.properties` (esta en `.gitignore`).
@@ -91,58 +89,34 @@ java -jar frontend/target/frontend-2.0.0.jar
 | Comportamiento | **State** | `question-service/.../domain/state/` (Borrador, PendienteRevision, Aprobada, Rechazada, Eliminada) |
 | Comportamiento | **Observer** | `common/.../events/DomainEventBus.java` (observadores: log y `RabbitEventForwarder` hacia el broker); en el frontend, `Subject`/`Observer` para refrescar pantallas |
 
-## Estado de los issues de Jira
+## Historias de usuario implementadas
 
-Hechos:
+Las 5 historias del segundo corte estan completas, en `main` y en estado *Listo* en Jira.
+Los issues de GitHub de cada subtarea estan cerrados.
 
-- **PSP-14** y **PSP-15**: formulario `frontend/.../ui/CreateQuestionFrame.java`
-  y reglas `common/.../contract/QuestionField.java`.
-- **PSP-8 (HU02), subtareas PSP-20 a PSP-23**: el autor envia su pregunta de Borrador a
-  Pendiente de revision con el boton "Enviar a revision" de "Mis preguntas".
-  `QuestionApplicationService.submitForReview` valida el autor (403), el patron State decide
-  la transicion (una no permitida responde **409**) y se publica `question.submitted`, que el
-  review-service consume para listar la pregunta como pendiente de asignar (HU04). Cada estado
-  se ve con su color y hay una leyenda. Pruebas en `SubmitForReviewTest` y `QuestionControllerHu02Test`.
-- **PSP-6 (HU01), subtareas PSP-16 a PSP-19**: crear preguntas. `QuestionApplicationService.create`
-  normaliza los datos, elige la fabrica del tipo (Factory Method), aplica la validacion
-  estructural completa y responde **400 con todos los errores juntos** (`QuestionPipeline.validateAll`),
-  guarda la pregunta en Borrador y publica `question.created`. El formulario muestra los errores
-  del servidor como lista. Pruebas en `CreateQuestionTest` y `QuestionControllerHu01Test`.
-- **PSP-9 (HU03), subtareas PSP-24 a PSP-29**: listado, busqueda (enunciado, contexto y tema),
-  filtros, paginacion y edicion de las preguntas del autor (403 si no es el autor, 409 si no
-  esta en Borrador). Backend en `QuestionApplicationService.search / update` y pantalla
-  `frontend/.../ui/MyQuestionsFrame.java` (menu "Mis preguntas" del autor).
-  Pruebas en `ListAndEditQuestionsTest`, `QuestionControllerHu03Test` y `MyQuestionsQueryTest`.
-- **PSP-44 (HU05, PSP-45 a PSP-50)**: el revisor lista sus preguntas asignadas,
-  las lee, las evalua y deja observaciones; la pregunta pasa a Aprobada o
-  Rechazada y se notifica al autor y a los administradores.
-  - Backend: `ReviewApplicationService` (`listAssignedTo`, `evaluate`, `listEvaluations`),
-    `EvaluationPolicy`, `QuestionApplicationService.applyEvaluation` y
-    `NotificationService.onQuestionEvaluated`.
-  - Frontend: `AssignedQuestionsFrame`, `QuestionDetailDialog` (tambien muestra las
-    observaciones, para el autor) y `EvaluationDialog`.
-  - Reglas: solo se evalua una pregunta asignada al revisor y Pendiente de
-    revision; **el primer revisor asignado que evalua decide el estado** y despues
-    la pregunta no admite mas evaluaciones; al rechazar, las observaciones son
-    obligatorias (maximo 2000 caracteres).
-  - Para probarla de punta a punta: crear la pregunta (HU01), enviarla a revision (HU02)
-    y asignarle revisores (HU04).
+| HU | Jira | Que hace | Donde |
+|----|------|----------|-------|
+| HU01 Crear preguntas | PSP-6 (PSP-14 a PSP-19) | El autor crea preguntas de seleccion multiple. La fabrica del tipo (Factory Method) aplica la validacion estructural completa y responde **400 con todos los errores juntos**; la pregunta valida queda en Borrador y se publica `question.created`. | `QuestionApplicationService.create`, `QuestionPipeline.validateAll`, `CreateQuestionFrame` |
+| HU02 Cambiar estado | PSP-8 (PSP-20 a PSP-23) | Boton "Enviar a revision": Borrador -> Pendiente de revision (patron State). Solo el autor (403) y solo desde Borrador (409). Publica `question.submitted`. Estados con colores y leyenda. | `QuestionApplicationService.submitForReview`, `MyQuestionsFrame` |
+| HU03 Listar mis preguntas | PSP-9 (PSP-24 a PSP-29) | Listado del autor con busqueda (enunciado, contexto y tema), filtros por estado y tema, paginacion y edicion de Borradores (403 si no es el autor, 409 si no esta en Borrador). | `QuestionApplicationService.search / update`, `MyQuestionsFrame` |
+| HU04 Asignar revisores | PSP-11 (PSP-30 a PSP-35) | El review-service registra las preguntas pendientes a partir de `question.submitted`; el administrador asigna de 1 a 3 revisores (validados contra user-service) y se publica `review.assigned`, con lo que el notification-service envia un correo a cada revisor. | `ReviewApplicationService.registerPendingQuestion / assignReviewers`, `ReviewPolicy`, `NotificationService.onReviewersAssigned`, `AssignReviewersFrame` |
+| HU05 Evaluar preguntas asignadas (nueva) | PSP-44 (PSP-45 a PSP-50) | El revisor lista sus preguntas asignadas, las lee, las aprueba o rechaza y deja observaciones (obligatorias al rechazar). **El primer revisor asignado que evalua decide el estado.** Se publica `review.evaluated`: el question-service cambia el estado y se notifica al autor y a los administradores. | `ReviewApplicationService.listAssignedTo / evaluate`, `EvaluationPolicy`, `QuestionApplicationService.applyEvaluation`, `AssignedQuestionsFrame`, `EvaluationDialog` |
 
-Lo pendiente esta marcado en el codigo con `TODO(PSP-xx)` y, en el API,
-responde **501 Not Implemented** con el issue. Para encontrarlos:
-`git grep -n "TODO(PSP-"`.
-
-| Issue | Que falta | Donde |
-|-------|-----------|-------|
-| PSP-30 | Registrar/listar preguntas pendientes desde el evento | `ReviewApplicationService.registerPendingQuestion / listPendingQuestions` |
-| PSP-31 a PSP-33 | Asignar 1 a 3 revisores (`ReviewPolicy` ya valida) y persistir | `ReviewApplicationService.assignReviewers`, `InMemoryReviewRepository` |
-| PSP-34 | Correo a los revisores | `NotificationService.onReviewersAssigned` |
-| PSP-35 | Pruebas | `review-service/src/test` |
-
-En el frontend, `BancoPreguntasFacade` ya expone todas las operaciones; solo
-faltan las pantallas (ver los `TODO` en `MainFrame`).
+Flujo de punta a punta: crear (HU01) -> enviar a revision (HU02) -> asignar revisores (HU04)
+-> evaluar (HU05); el autor ve el resultado y las observaciones en "Mis preguntas" (HU03).
 
 ## Pruebas
 
-`mvn test` ejecuta 122 pruebas JUnit 5 en los 7 modulos (entidades, servicios,
-patrones, repositorios SQLite, cliente HTTP y fachada del frontend).
+`mvn test` ejecuta **207 pruebas** JUnit 5: entidades y reglas del dominio, servicios
+de aplicacion de cada microservicio, patrones, repositorios SQLite, los codigos HTTP del
+API (200, 201, 400, 403, 404 y 409) y la logica del frontend. No necesitan RabbitMQ ni
+servidor de correo.
+
+| Modulo | Pruebas |
+|--------|---------|
+| common | 15 |
+| user-service | 20 |
+| question-service | 94 |
+| review-service | 42 |
+| notification-service | 17 |
+| frontend | 19 |
