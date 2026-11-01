@@ -2,6 +2,8 @@ package co.unicauca.saberpro.question.application;
 
 import co.unicauca.saberpro.common.events.QuestionEvaluatedEvent;
 import co.unicauca.saberpro.common.web.BusinessException;
+import co.unicauca.saberpro.common.web.ConflictException;
+import co.unicauca.saberpro.common.web.ForbiddenOperationException;
 import co.unicauca.saberpro.common.web.PendingIssueException;
 import co.unicauca.saberpro.common.web.ResourceNotFoundException;
 import co.unicauca.saberpro.question.access.IQuestionRepository;
@@ -62,7 +64,8 @@ public class QuestionApplicationService {
 
     /**
      * HU03: listado de las preguntas del autor con busqueda, filtros y
-     * paginacion (PSP-24 listado, PSP-25 busqueda por palabra clave, PSP-26
+     * paginacion (PSP-24 listado, PSP-25 busqueda por palabra clave en el
+     * enunciado, el contexto o el tema, PSP-26
      * filtros por estado y tema, PSP-27 paginacion).
      *
      * Normaliza los criterios (textos sin espacios sobrantes, tamano de
@@ -88,8 +91,8 @@ public class QuestionApplicationService {
     /**
      * HU03: edita una pregunta propia (PSP-28).
      *
-     * Solo el autor puede editarla y solo mientras su estado lo permita
-     * (Borrador; lo decide el patron State con isEditable()). Los datos
+     * Solo el autor puede editarla (si no, 403) y solo mientras su estado lo
+     * permita (Borrador, lo decide el patron State con isEditable(); si no, 409). Los datos
      * nuevos pasan por la misma validacion estructural de la fabrica del
      * tipo. La pregunta conserva su id, tipo, autor, fecha de creacion y
      * estado.
@@ -97,10 +100,10 @@ public class QuestionApplicationService {
     public Question update(String id, QuestionRequest request) {
         Question current = findById(id);
         if (!current.isAuthoredBy(request.getAuthorLogin())) {
-            throw new BusinessException("Solo el autor de la pregunta puede editarla.");
+            throw new ForbiddenOperationException("Solo el autor de la pregunta puede editarla.");
         }
         if (!current.isEditable()) {
-            throw new BusinessException("Solo se pueden editar preguntas en estado Borrador. Esta pregunta esta en "
+            throw new ConflictException("Solo se pueden editar preguntas en estado Borrador. Esta pregunta esta en "
                     + current.getStatus().getLabel() + ".");
         }
 
