@@ -53,9 +53,15 @@ services:
         SERVICE: review-service
     environment:
       RABBITMQ_HOST: rabbitmq
+      USER_SERVICE_URL: http://user-service:8081
+      SABERPRO_DATA_DIR: /data
+    volumes:
+      - review-data:/data
     depends_on:
       rabbitmq:
         condition: service_healthy
+      user-service:
+        condition: service_started
 
   notification-service:
     build:
@@ -93,4 +99,5 @@ services:
 volumes:
   user-data:
   question-data:
+  review-data:
   outbox:

@@ -19,7 +19,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
-/** API REST de revision por pares. Los casos de uso pendientes responden 501 indicando su issue de Jira. */
+/** API REST de revision por pares (HU04 y HU05). */
 @RestController
 @RequestMapping("/api/reviews")
 @Tag(name = "Revision por pares")
@@ -34,7 +34,9 @@ public class ReviewController {
     @GetMapping("/pending-questions")
     @Operation(summary = "HU04: preguntas Pendientes de revision que el administrador puede asignar [PSP-30]")
     public List<PendingQuestionResponse> pendingQuestions() {
-        return service.listPendingQuestions().stream().map(PendingQuestionResponse::from).toList();
+        return service.listPendingQuestions().stream()
+                .map(q -> PendingQuestionResponse.from(q, service.listAssignmentsOf(q.questionId())))
+                .toList();
     }
 
     @PostMapping("/assignments")

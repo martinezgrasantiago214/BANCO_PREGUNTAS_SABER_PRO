@@ -1,6 +1,7 @@
 package co.unicauca.saberpro.review.access;
 
 import co.unicauca.saberpro.common.contract.EvaluationVerdict;
+import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.review.domain.Evaluation;
 import co.unicauca.saberpro.review.domain.PendingQuestion;
 import co.unicauca.saberpro.review.domain.ReviewAssignment;
@@ -33,6 +34,15 @@ class InMemoryReviewRepositoryTest {
         assertEquals(2, repository.findAssignmentsByQuestion("q-1").size());
         assertEquals(2, repository.findAssignmentsByReviewer("rev1").size());
         assertTrue(repository.findAssignmentsByReviewer("rev3").isEmpty());
+    }
+
+    @Test
+    void noGuardaDosVecesElMismoRevisorParaLaMismaPregunta() {
+        repository.saveAssignment(new ReviewAssignment("q-1", "rev1", "admin", null));
+
+        assertThrows(BusinessException.class,
+                () -> repository.saveAssignment(new ReviewAssignment("q-1", "rev1", "admin", null)));
+        assertEquals(1, repository.findAssignmentsByQuestion("q-1").size());
     }
 
     @Test

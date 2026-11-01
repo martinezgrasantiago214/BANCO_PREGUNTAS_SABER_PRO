@@ -62,10 +62,9 @@ public class MainFrame extends JFrame {
             panel.add(centered(UiTheme.primaryButton("Mis preguntas"),
                     e -> new MyQuestionsFrame(context).setVisible(true)));
         } else if (role == Role.ADMINISTRADOR) {
-            // TODO(PSP-30..32): pantalla "Asignar revisores" usando facade.listPendingQuestions,
-            //  listReviewers y assignReviewers.
+            // HU04 (PSP-30..32): preguntas pendientes y asignacion de revisores.
             panel.add(centered(UiTheme.primaryButton("Asignar revisores"),
-                    e -> Dialogs.showPendingScreen(this, "Asignar revisores", "PSP-30 a PSP-32")));
+                    e -> new AssignReviewersFrame(context).setVisible(true)));
             panel.add(Box.createVerticalStrut(12));
             panel.add(centered(UiTheme.primaryButton("Registrar usuario"),
                     e -> new RegisterFrame(context).setVisible(true)));

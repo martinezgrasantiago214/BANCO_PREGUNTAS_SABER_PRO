@@ -22,12 +22,14 @@ public final class ReviewDtos {
                                   String observations) {
     }
 
+    /** Pregunta Pendiente de revision con los revisores que ya tiene asignados (HU04). */
     public record PendingQuestionResponse(String questionId, String authorLogin, String directQuestion,
-                                          String submittedAt) {
+                                          String submittedAt, List<String> assignedReviewers) {
 
-        public static PendingQuestionResponse from(PendingQuestion q) {
+        public static PendingQuestionResponse from(PendingQuestion q, List<ReviewAssignment> assignments) {
             return new PendingQuestionResponse(q.questionId(), q.authorLogin(), q.directQuestion(),
-                    q.submittedAt() != null ? q.submittedAt().toString() : null);
+                    q.submittedAt() != null ? q.submittedAt().toString() : null,
+                    assignments.stream().map(ReviewAssignment::getReviewerLogin).toList());
         }
     }
 

@@ -23,11 +23,7 @@ public class NotificationEventsConsumer {
 
     @RabbitListener(queues = NotificationMessagingConfig.REVIEWERS_ASSIGNED_QUEUE)
     public void onReviewersAssigned(ReviewersAssignedEvent event) {
-        try {
-            service.onReviewersAssigned(event);
-        } catch (PendingIssueException ex) {
-            LOGGER.warn("{} Evento ignorado: {}", ex.getMessage(), event);
-        }
+        service.onReviewersAssigned(event);
     }
 
     @RabbitListener(queues = NotificationMessagingConfig.QUESTION_EVALUATED_QUEUE)

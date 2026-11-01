@@ -1,13 +1,15 @@
 package co.unicauca.saberpro.review.application;
 
 import co.unicauca.saberpro.common.contract.EvaluationVerdict;
+import co.unicauca.saberpro.common.contract.Role;
 import co.unicauca.saberpro.common.events.DomainEvent;
 import co.unicauca.saberpro.common.events.DomainEventBus;
 import co.unicauca.saberpro.common.events.QuestionEvaluatedEvent;
 import co.unicauca.saberpro.common.events.QuestionSubmittedForReviewEvent;
+import co.unicauca.saberpro.common.events.ReviewersAssignedEvent;
 import co.unicauca.saberpro.common.web.BusinessException;
-import co.unicauca.saberpro.common.web.PendingIssueException;
 import co.unicauca.saberpro.review.access.InMemoryReviewRepository;
+import co.unicauca.saberpro.review.directory.UserRoleDirectory;
 import co.unicauca.saberpro.review.domain.Evaluation;
 import co.unicauca.saberpro.review.domain.PendingQuestion;
 import co.unicauca.saberpro.review.domain.ReviewAssignment;
@@ -16,16 +18,23 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * Casos de uso del review-service.
  *
+ * HU04 (PSP-35): registro de preguntas pendientes desde el evento y
+ * asignacion valida e invalida de revisores. El user-service se reemplaza
+ * por un directorio de roles en memoria.
+ *
  * HU05 (PSP-50): listado de preguntas asignadas, evaluacion y publicacion del
- * evento. Las preguntas pendientes y las asignaciones se cargan directamente
- * en el repositorio, porque registrarlas es parte de HU04.
+ * evento. En esas pruebas las preguntas pendientes y las asignaciones se
+ * cargan directamente en el repositorio.
  */
 class ReviewApplicationServiceTest {
 
@@ -35,12 +44,18 @@ class ReviewApplicationServiceTest {
     private final List<DomainEvent> published = new ArrayList<>();
     private ReviewApplicationService service;
 
+    /** Usuarios de prueba del user-service y su rol. */
+    private final Map<String, Role> roles = new HashMap<>(Map.of(
+            "rev1", Role.REVISOR, "rev2", Role.REVISOR, "rev3", Role.REVISOR, "rev4", Role.REVISOR,
+            "autor1", Role.AUTOR_PREGUNTAS, "admin", Role.ADMINISTRADOR));
+
     @BeforeEach
     void setUp() {
         repository = new InMemoryReviewRepository();
         DomainEventBus bus = new DomainEventBus();
         bus.subscribe(published::add);
-        service = new ReviewApplicationService(repository, bus);
+        UserRoleDirectory directory = login -> Optional.ofNullable(roles.get(login));
+        service = new ReviewApplicationService(repository, bus, directory);
     }
 
     /** Pregunta Pendiente de revision asignada a los revisores indicados. */
@@ -167,23 +182,175 @@ class ReviewApplicationServiceTest {
         assertThrows(BusinessException.class, () -> service.listEvaluations(""));
     }
 
-    // ---- HU04, pendiente ----
+    // ---- HU04 (PSP-30): preguntas pendientes ----
+
+    private void submitted(String questionId, Instant at) {
+        service.registerPendingQuestion(new QuestionSubmittedForReviewEvent(questionId, "autor1",
+                "¿Que patron usar en " + questionId + "?", at));
+    }
 
     @Test
-    void losCasosDeUsoDeHu04PendientesIndicanSuIssue() {
-        assertPending("PSP-30", () -> service.registerPendingQuestion(
-                new QuestionSubmittedForReviewEvent("q-1", "autor1", "¿P?", Instant.now())));
-        assertPending("PSP-30", service::listPendingQuestions);
-        assertPending("PSP-32", () -> service.assignReviewers("q-1", List.of("rev1"), "admin"));
+    void unaPreguntaEnviadaARevisionApareceEnElListadoDelAdministrador() {
+        submitted("q-2", T0.plusSeconds(60));
+        submitted("q-1", T0);
+
+        List<PendingQuestion> pending = service.listPendingQuestions();
+
+        assertEquals(List.of("q-1", "q-2"), pending.stream().map(PendingQuestion::questionId).toList());
+        assertEquals("autor1", pending.get(0).authorLogin());
+        assertEquals("¿Que patron usar en q-1?", pending.get(0).directQuestion());
+        assertEquals(T0, pending.get(0).submittedAt());
+    }
+
+    @Test
+    void siElEventoLlegaDosVecesLaPreguntaSeListaUnaSolaVez() {
+        submitted("q-1", T0);
+        submitted("q-1", T0);
+
+        assertEquals(1, service.listPendingQuestions().size());
+    }
+
+    @Test
+    void unEventoSinPreguntaSeRechaza() {
+        assertThrows(BusinessException.class, () -> service.registerPendingQuestion(
+                new QuestionSubmittedForReviewEvent(" ", "autor1", "¿P?", T0)));
+        assertTrue(service.listPendingQuestions().isEmpty());
+    }
+
+    @Test
+    void unaPreguntaYaEvaluadaNoSeListaComoPendiente() {
+        pendingQuestionAssignedTo("q-1", "rev1");
+        submitted("q-2", T0);
+        service.evaluate("q-1", "rev1", EvaluationVerdict.APROBADA, "Bien");
+
+        assertEquals(List.of("q-2"), service.listPendingQuestions().stream().map(PendingQuestion::questionId).toList());
+    }
+
+    // ---- HU04 (PSP-31 y PSP-32): asignacion valida ----
+
+    @Test
+    void laAsignacionValidaSeGuardaYPublicaElEventoConLosRevisores() {
+        submitted("q-1", T0);
+
+        List<ReviewAssignment> created = service.assignReviewers("q-1", List.of("rev1", " rev2 "), "admin");
+
+        assertEquals(List.of("rev1", "rev2"), created.stream().map(ReviewAssignment::getReviewerLogin).toList());
+        assertTrue(created.stream().allMatch(a -> "admin".equals(a.getAssignedBy())));
+        assertEquals(List.of("rev1", "rev2"),
+                service.listAssignmentsOf("q-1").stream().map(ReviewAssignment::getReviewerLogin).toList());
+        assertEquals(List.of("q-1"), service.listAssignedTo("rev1").stream().map(ReviewAssignment::getQuestionId).toList());
+
+        assertEquals(1, published.size());
+        ReviewersAssignedEvent event = assertInstanceOf(ReviewersAssignedEvent.class, published.get(0));
+        assertEquals("q-1", event.questionId());
+        assertEquals("¿Que patron usar en q-1?", event.directQuestion());
+        assertEquals(List.of("rev1", "rev2"), event.reviewerLogins());
+        assertEquals("admin", event.assignedBy());
+    }
+
+    @Test
+    void sePuedenAgregarRevisoresHastaCompletarTres() {
+        submitted("q-1", T0);
+        service.assignReviewers("q-1", List.of("rev1"), "admin");
+
+        service.assignReviewers("q-1", List.of("rev2", "rev3"), "admin");
+
+        assertEquals(3, service.listAssignmentsOf("q-1").size());
+        assertEquals(2, published.size());
+    }
+
+    // ---- HU04 (PSP-31 y PSP-32): asignacion invalida ----
+
+    @Test
+    void hayQueElegirEntreUnoYTresRevisores() {
+        submitted("q-1", T0);
+
+        assertRejected("al menos 1 revisor", () -> service.assignReviewers("q-1", List.of(), "admin"));
+        assertRejected("al menos 1 revisor", () -> service.assignReviewers("q-1", null, "admin"));
+        assertRejected("mas de 3 revisores",
+                () -> service.assignReviewers("q-1", List.of("rev1", "rev2", "rev3", "rev4"), "admin"));
+        assertRejected("mismo revisor dos veces",
+                () -> service.assignReviewers("q-1", List.of("rev1", "rev1"), "admin"));
+        assertNothingAssigned("q-1");
+    }
+
+    @Test
+    void conLosYaAsignadosNoSePuedenSuperarTresRevisores() {
+        submitted("q-1", T0);
+        service.assignReviewers("q-1", List.of("rev1", "rev2"), "admin");
+        published.clear();
+
+        assertRejected("no puede tener mas de 3",
+                () -> service.assignReviewers("q-1", List.of("rev3", "rev4"), "admin"));
+        assertEquals(2, service.listAssignmentsOf("q-1").size());
+        assertTrue(published.isEmpty());
+    }
+
+    @Test
+    void elAutorNoPuedeSerRevisorDeSuPropiaPregunta() {
+        roles.put("autor1", Role.REVISOR);
+        submitted("q-1", T0);
+
+        assertRejected("No puede asignar al autor (autor1)",
+                () -> service.assignReviewers("q-1", List.of("autor1"), "admin"));
+        assertNothingAssigned("q-1");
+    }
+
+    @Test
+    void soloSePuedenElegirUsuariosConRolRevisor() {
+        submitted("q-1", T0);
+
+        assertRejected("admin no tiene el rol Revisor",
+                () -> service.assignReviewers("q-1", List.of("rev1", "admin"), "admin"));
+        assertRejected("fantasma no existe", () -> service.assignReviewers("q-1", List.of("fantasma"), "admin"));
+        assertNothingAssigned("q-1");
+    }
+
+    @Test
+    void noSePuedeAsignarDosVecesElMismoRevisorAUnaPregunta() {
+        submitted("q-1", T0);
+        service.assignReviewers("q-1", List.of("rev1"), "admin");
+        published.clear();
+
+        assertRejected("rev1 ya esta asignado", () -> service.assignReviewers("q-1", List.of("rev1"), "admin"));
+        assertEquals(1, service.listAssignmentsOf("q-1").size());
+        assertTrue(published.isEmpty());
+    }
+
+    @Test
+    void soloSeAsignanRevisoresAPreguntasPendientesDeRevision() {
+        assertRejected("no esta Pendiente de revision",
+                () -> service.assignReviewers("q-9", List.of("rev1"), "admin"));
+
+        pendingQuestionAssignedTo("q-1", "rev1");
+        service.evaluate("q-1", "rev1", EvaluationVerdict.APROBADA, "Bien");
+        published.clear();
+        assertRejected("ya fue evaluada", () -> service.assignReviewers("q-1", List.of("rev2"), "admin"));
+        assertTrue(published.isEmpty());
+    }
+
+    @Test
+    void sinPreguntaOSinAdministradorNoSeAsigna() {
+        submitted("q-1", T0);
+
+        assertThrows(BusinessException.class, () -> service.assignReviewers(" ", List.of("rev1"), "admin"));
+        assertThrows(BusinessException.class, () -> service.assignReviewers("q-1", List.of("rev1"), null));
+        assertNothingAssigned("q-1");
+    }
+
+    private void assertRejected(String expectedMessage, Runnable call) {
+        BusinessException ex = assertThrows(BusinessException.class, call::run);
+        assertTrue(ex.getMessages().stream().anyMatch(m -> m.contains(expectedMessage)),
+                () -> "Se esperaba un error con '" + expectedMessage + "', se obtuvo " + ex.getMessages());
+    }
+
+    private void assertNothingAssigned(String questionId) {
+        assertTrue(service.listAssignmentsOf(questionId).isEmpty());
+        assertTrue(published.isEmpty());
     }
 
     private void assertNothingSaved(String questionId) {
         assertTrue(service.listEvaluations(questionId).isEmpty());
         assertTrue(published.isEmpty());
-    }
-
-    private void assertPending(String issue, Runnable call) {
-        PendingIssueException ex = assertThrows(PendingIssueException.class, call::run);
-        assertEquals(issue, ex.getIssueKey());
     }
 }
