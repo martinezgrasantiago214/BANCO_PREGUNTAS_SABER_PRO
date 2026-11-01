@@ -63,7 +63,6 @@ class QuestionApplicationServiceTest {
 
     @Test
     void losCasosDeUsoPendientesIndicanSuIssue() {
-        assertPending("PSP-18", () -> service.create(TestData.validRequest("MULTIPLE_CHOICE")));
         assertPending("PSP-21", () -> service.submitForReview("q-1", "autor1"));
     }
 

@@ -4,6 +4,8 @@ import co.unicauca.saberpro.question.domain.Question;
 import co.unicauca.saberpro.question.domain.QuestionRequest;
 import co.unicauca.saberpro.question.domain.validation.QuestionPipeline;
 
+import java.util.List;
+
 /**
  * Patron Factory Method (GoF, creacional). Esta clase define el algoritmo
  * comun para crear una pregunta a partir de lo que capturo el autor, y deja
@@ -49,12 +51,12 @@ public abstract class QuestionFactory {
      * La usa la edicion (HU03): los datos nuevos pasan por las mismas reglas
      * que al crear, pero la pregunta conserva su identidad.
      *
-     * @throws QuestionValidationException si la solicitud no supera la validacion.
+     * @throws QuestionValidationException con todos los errores si la solicitud no supera la validacion.
      */
     public final void validate(QuestionRequest request) {
-        QuestionPipeline pipeline = createValidationPipeline();
-        if (!pipeline.execute(request)) {
-            throw new QuestionValidationException(pipeline.getLastError());
+        List<String> errors = createValidationPipeline().validateAll(request);
+        if (!errors.isEmpty()) {
+            throw new QuestionValidationException(errors);
         }
     }
 

@@ -41,6 +41,33 @@ public class QuestionRequest {
         this.authorLogin = authorLogin;
     }
 
+    /**
+     * Copia "limpia" de lo que envio el autor: textos sin espacios sobrantes
+     * y la respuesta correcta escrita exactamente igual que el distractor al
+     * que corresponde (la validacion la acepta sin distinguir mayusculas). Asi
+     * la pregunta guardada siempre puede marcar cual opcion es la correcta.
+     */
+    public QuestionRequest normalized() {
+        List<String> options = distractors == null ? null
+                : distractors.stream().map(QuestionRequest::trim).toList();
+        String answer = trim(correctAnswer);
+        if (options != null && answer != null) {
+            for (String option : options) {
+                if (option != null && option.equalsIgnoreCase(answer)) {
+                    answer = option;
+                    break;
+                }
+            }
+        }
+        return new QuestionRequest(trim(type), trim(context), trim(directQuestion), options, answer,
+                trim(justification), trim(bibliography), trim(competence), trim(topic), trim(subtopic),
+                difficultyLevel, trim(authorLogin));
+    }
+
+    private static String trim(String value) {
+        return value == null ? null : value.trim();
+    }
+
     public String getType() { return type; }
     public String getContext() { return context; }
     public String getDirectQuestion() { return directQuestion; }
