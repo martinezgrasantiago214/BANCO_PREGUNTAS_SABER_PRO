@@ -65,6 +65,11 @@ java -jar frontend/target/frontend-2.0.0.jar
 # o: mvn -pl frontend exec:java
 ```
 
+**Opcion C: VS Code con un clic.** Encender RabbitMQ una vez (`brew services start rabbitmq`
+o `docker compose up rabbitmq`), abrir *Run and Debug* (`Cmd/Ctrl + Shift + D`), elegir
+**"Banco de Preguntas (todo el sistema)"** y darle Play: arranca los 4 servicios, el gateway y
+el frontend (configuracion en `.vscode/launch.json`). Esperar unos 20 segundos antes de iniciar sesion.
+
 - Swagger UI unificado: http://localhost:8080/swagger-ui.html
 - Consola de RabbitMQ: http://localhost:15672 (guest / guest)
 - Si el puerto 8080 esta ocupado: `PORT=8090` para el gateway y
