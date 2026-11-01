@@ -3,7 +3,6 @@ package co.unicauca.saberpro.notification.application;
 import co.unicauca.saberpro.common.contract.EvaluationVerdict;
 import co.unicauca.saberpro.common.events.QuestionEvaluatedEvent;
 import co.unicauca.saberpro.common.events.ReviewersAssignedEvent;
-import co.unicauca.saberpro.common.web.PendingIssueException;
 import co.unicauca.saberpro.notification.channel.NotificationChannel;
 import co.unicauca.saberpro.notification.directory.UserDirectory;
 import co.unicauca.saberpro.notification.domain.DeliveryResult;
@@ -82,20 +81,111 @@ class NotificationServiceTest {
         assertEquals(1, outbox.sent.size());
     }
 
-    @Test
-    void losManejadoresDeEventosPendientesIndicanSuIssue() {
-        NotificationService service = new NotificationService(new RecordingChannel("SMTP", true), null, NO_USERS);
-
-        PendingIssueException assigned = assertThrows(PendingIssueException.class, () -> service.onReviewersAssigned(
-                new ReviewersAssignedEvent("q-1", "¿P?", List.of("rev1"), "admin", Instant.now())));
-        assertEquals("PSP-34", assigned.getIssueKey());
-    }
-
-    // ---- HU05 (PSP-49 y PSP-50): aviso de la evaluacion ----
-
     private static final Recipient AUTOR = new Recipient("autor1", "Autor Uno", "autor1@x.co", "AUTOR_PREGUNTAS");
     private static final Recipient ADMIN = new Recipient("admin", "Admin", "admin@x.co", "ADMINISTRADOR");
     private static final Recipient ADMIN2 = new Recipient("admin2", "Admin Dos", "admin2@x.co", "ADMINISTRADOR");
+    private static final Recipient REV1 = new Recipient("rev1", "Revisor Uno", "rev1@x.co", "REVISOR");
+    private static final Recipient REV2 = new Recipient("rev2", "Revisor Dos", "rev2@x.co", "REVISOR");
+
+    // ---- HU04 (PSP-34 y PSP-35): aviso de la asignacion ----
+
+    private static ReviewersAssignedEvent assigned(String... reviewers) {
+        return new ReviewersAssignedEvent("q-1", "¿Que patron permite agregar plugins?", List.of(reviewers), "admin",
+                Instant.now());
+    }
+
+    @Test
+    void cadaRevisorAsignadoRecibeSuCorreoConLaPregunta() {
+        RecordingChannel smtp = new RecordingChannel("SMTP", true);
+        NotificationService service = new NotificationService(smtp, null, directory(List.of(REV1, REV2)));
+
+        List<DeliveryResult> results = service.onReviewersAssigned(assigned("rev1", "rev2"));
+
+        assertEquals(2, results.size());
+        assertTrue(results.stream().allMatch(DeliveryResult::delivered));
+        assertEquals(List.of("rev1@x.co", "rev2@x.co"), smtp.sent.stream().map(Notification::recipientEmail).toList());
+
+        Notification toRev1 = smtp.sent.get(0);
+        assertEquals("Revisor Uno", toRev1.recipientName());
+        assertTrue(toRev1.subject().contains("Nueva pregunta para revisar"));
+        assertTrue(toRev1.body().contains("Hola Revisor Uno"));
+        assertTrue(toRev1.body().contains("¿Que patron permite agregar plugins?"));
+        assertTrue(toRev1.body().contains("Identificador: q-1"));
+        assertTrue(toRev1.body().contains("(admin)"));
+    }
+
+    @Test
+    void siElSmtpFallaElCorreoDelRevisorQuedaEnLaBandejaDeRespaldo() {
+        RecordingChannel smtp = new RecordingChannel("SMTP", false);
+        RecordingChannel outbox = new RecordingChannel("OUTBOX", true);
+        NotificationService service = new NotificationService(smtp, outbox, directory(List.of(REV1)));
+
+        List<DeliveryResult> results = service.onReviewersAssigned(assigned("rev1"));
+
+        assertEquals("OUTBOX", results.get(0).channel());
+        assertEquals("rev1@x.co", outbox.sent.get(0).recipientEmail());
+    }
+
+    @Test
+    void elFalloDeUnCorreoNoImpideEnviarLosDemas() {
+        NotificationChannel flaky = new NotificationChannel() {
+            @Override
+            public String name() {
+                return "SMTP";
+            }
+
+            @Override
+            public DeliveryResult send(Notification n) {
+                if (n.recipientEmail().equals("rev1@x.co")) {
+                    throw new IllegalStateException("buzon lleno");
+                }
+                return DeliveryResult.delivered("SMTP", "ok");
+            }
+        };
+        NotificationService service = new NotificationService(flaky, null, directory(List.of(REV1, REV2)));
+
+        List<DeliveryResult> results = service.onReviewersAssigned(assigned("rev1", "rev2"));
+
+        assertEquals(2, results.size());
+        assertFalse(results.get(0).delivered());
+        assertTrue(results.get(1).delivered());
+    }
+
+    @Test
+    void unRevisorQueNoSeEncuentraNoImpideAvisarALosDemas() {
+        RecordingChannel smtp = new RecordingChannel("SMTP", true);
+        UserDirectory broken = new UserDirectory() {
+            @Override
+            public Optional<Recipient> findByLogin(String login) {
+                if (login.equals("rev1")) {
+                    throw new IllegalStateException("user-service caido");
+                }
+                return login.equals("rev2") ? Optional.of(REV2) : Optional.empty();
+            }
+
+            @Override
+            public List<Recipient> findAdministrators() {
+                return List.of();
+            }
+        };
+        NotificationService service = new NotificationService(smtp, null, broken);
+
+        List<DeliveryResult> results = service.onReviewersAssigned(assigned("rev1", "borrado", "rev2"));
+
+        assertEquals(1, results.size());
+        assertEquals(List.of("rev2@x.co"), smtp.sent.stream().map(Notification::recipientEmail).toList());
+    }
+
+    @Test
+    void sinRevisoresNoSeEnviaNada() {
+        RecordingChannel smtp = new RecordingChannel("SMTP", true);
+        NotificationService service = new NotificationService(smtp, null, NO_USERS);
+
+        assertTrue(service.onReviewersAssigned(assigned()).isEmpty());
+        assertTrue(smtp.sent.isEmpty());
+    }
+
+    // ---- HU05 (PSP-49 y PSP-50): aviso de la evaluacion ----
 
     /** Directorio de prueba con los usuarios indicados. */
     private static UserDirectory directory(List<Recipient> all) {

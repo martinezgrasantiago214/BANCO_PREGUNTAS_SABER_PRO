@@ -1,5 +1,6 @@
 package co.unicauca.saberpro.review.access;
 
+import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.review.domain.Evaluation;
 import co.unicauca.saberpro.review.domain.PendingQuestion;
 import co.unicauca.saberpro.review.domain.ReviewAssignment;
@@ -11,11 +12,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
- * Implementacion temporal en memoria: los datos se pierden al reiniciar.
- *
- * TODO(PSP-33): reemplazarla por una base de datos propia del review-service
- * (por ejemplo SQLite, igual que SQLiteQuestionRepository en el
- * question-service) para que la asignacion quede registrada.
+ * Implementacion en memoria para las pruebas unitarias: los datos se pierden
+ * al reiniciar. El servicio usa {@link SQLiteReviewRepository} (PSP-33).
  */
 public class InMemoryReviewRepository implements IReviewRepository {
 
@@ -39,7 +37,13 @@ public class InMemoryReviewRepository implements IReviewRepository {
     }
 
     @Override
-    public void saveAssignment(ReviewAssignment assignment) {
+    public synchronized void saveAssignment(ReviewAssignment assignment) {
+        boolean duplicate = assignments.stream()
+                .anyMatch(a -> a.isFor(assignment.getQuestionId(), assignment.getReviewerLogin()));
+        if (duplicate) {
+            throw new BusinessException("El revisor " + assignment.getReviewerLogin()
+                    + " ya esta asignado a la pregunta " + assignment.getQuestionId() + ".");
+        }
         assignments.add(assignment);
     }
 

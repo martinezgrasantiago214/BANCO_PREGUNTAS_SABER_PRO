@@ -38,8 +38,13 @@ public final class Models {
     public record PageView<T>(List<T> items, int page, int pageSize, long totalItems, int totalPages) {
     }
 
+    /** HU04: pregunta Pendiente de revision con los revisores que ya tiene asignados. */
     public record PendingQuestionView(String questionId, String authorLogin, String directQuestion,
-                                      String submittedAt) {
+                                      String submittedAt, List<String> assignedReviewers) {
+
+        public PendingQuestionView {
+            assignedReviewers = assignedReviewers == null ? List.of() : List.copyOf(assignedReviewers);
+        }
     }
 
     public record AssignmentView(String questionId, String reviewerLogin, String assignedBy, String assignedAt) {
