@@ -25,11 +25,6 @@ import java.util.List;
  * Casos de uso del question-service. Coordina el dominio (fabricas, Builder,
  * estados), la persistencia y la publicacion de eventos; no contiene reglas
  * de negocio propias.
- *
- * Los casos de uso marcados con TODO(PSP-xx) quedan para el issue indicado:
- * responden 501 Not Implemented hasta que se implementen. Las piezas que
- * necesitan (fabricas + validacion, repositorio, estados, bus de eventos)
- * ya estan disponibles y probadas.
  */
 public class QuestionApplicationService {
 
