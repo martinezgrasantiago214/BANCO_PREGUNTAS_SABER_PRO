@@ -3,12 +3,14 @@ package co.unicauca.saberpro.review.application;
 import co.unicauca.saberpro.common.contract.EvaluationVerdict;
 import co.unicauca.saberpro.common.events.DomainEventBus;
 import co.unicauca.saberpro.common.events.QuestionSubmittedForReviewEvent;
+import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.common.web.PendingIssueException;
 import co.unicauca.saberpro.review.access.IReviewRepository;
 import co.unicauca.saberpro.review.domain.Evaluation;
 import co.unicauca.saberpro.review.domain.PendingQuestion;
 import co.unicauca.saberpro.review.domain.ReviewAssignment;
 
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -52,9 +54,16 @@ public class ReviewApplicationService {
         throw new PendingIssueException("PSP-32", "asignar revisores a una pregunta (HU04)");
     }
 
-    /** TODO(PSP-45): HU05 - preguntas asignadas al revisor autenticado (repository.findAssignmentsByReviewer). */
+    /**
+     * HU05 (PSP-45): preguntas que el administrador le asigno a un revisor,
+     * de la asignacion mas reciente a la mas antigua. Solo devuelve las de
+     * ese revisor.
+     */
     public List<ReviewAssignment> listAssignedTo(String reviewerLogin) {
-        throw new PendingIssueException("PSP-45", "listar las preguntas asignadas a un revisor (HU05)");
+        String reviewer = requireText(reviewerLogin, "Debe indicar el login del revisor.");
+        return repository.findAssignmentsByReviewer(reviewer).stream()
+                .sorted(Comparator.comparing(ReviewAssignment::getAssignedAt).reversed())
+                .toList();
     }
 
     /**
@@ -72,5 +81,12 @@ public class ReviewApplicationService {
     /** TODO(PSP-47): HU05 - el autor lee las observaciones (repository.findEvaluationsByQuestion). */
     public List<Evaluation> listEvaluations(String questionId) {
         throw new PendingIssueException("PSP-47", "consultar las observaciones de una pregunta (HU05)");
+    }
+
+    private static String requireText(String value, String message) {
+        if (value == null || value.isBlank()) {
+            throw new BusinessException(message);
+        }
+        return value.trim();
     }
 }
