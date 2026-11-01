@@ -3,7 +3,6 @@ package co.unicauca.saberpro.notification.application;
 import co.unicauca.saberpro.common.contract.EvaluationVerdict;
 import co.unicauca.saberpro.common.events.QuestionEvaluatedEvent;
 import co.unicauca.saberpro.common.events.ReviewersAssignedEvent;
-import co.unicauca.saberpro.common.web.PendingIssueException;
 import co.unicauca.saberpro.notification.channel.NotificationChannel;
 import co.unicauca.saberpro.notification.directory.UserDirectory;
 import co.unicauca.saberpro.notification.domain.DeliveryResult;
@@ -14,8 +13,10 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Envia las notificaciones que disparan los eventos. Intenta primero el canal
@@ -48,13 +49,33 @@ public class NotificationService {
     }
 
     /**
-     * HU04: avisar por correo a cada revisor asignado.
+     * HU04 (PSP-34): avisa por correo a cada revisor asignado. Si no se
+     * encuentra a un revisor o falla su envio, se intenta igual con los demas.
      *
-     * TODO(PSP-34): por cada login de event.reviewerLogins(), buscar su correo con users.findByLogin(...),
-     * armar la Notification (pregunta event.directQuestion(), id event.questionId()) y llamar deliver(...).
+     * @return el resultado del envio a cada revisor encontrado.
      */
-    public void onReviewersAssigned(ReviewersAssignedEvent event) {
-        throw new PendingIssueException("PSP-34", "enviar el correo a los revisores asignados (HU04)");
+    public List<DeliveryResult> onReviewersAssigned(ReviewersAssignedEvent event) {
+        List<String> logins = event.reviewerLogins() == null ? List.of() : event.reviewerLogins();
+        List<DeliveryResult> results = new ArrayList<>();
+        for (String login : new LinkedHashSet<>(logins)) {
+            Optional<Recipient> reviewer = findQuietly(login);
+            if (reviewer.isEmpty()) {
+                LOGGER.warn("No se encontro al revisor {} para avisarle la asignacion de la pregunta {}",
+                        login, event.questionId());
+                continue;
+            }
+            results.add(safeDeliver(assignmentNotice(reviewer.get(), event)));
+        }
+        return results;
+    }
+
+    private Optional<Recipient> findQuietly(String login) {
+        try {
+            return users.findByLogin(login);
+        } catch (RuntimeException ex) {
+            LOGGER.error("Error al consultar al usuario {}", login, ex);
+            return Optional.empty();
+        }
     }
 
     /**
@@ -100,6 +121,27 @@ public class NotificationService {
             LOGGER.error("Error al notificar a {}", notification.recipientEmail(), ex);
             return DeliveryResult.failed("ERROR", ex.getMessage());
         }
+    }
+
+    private static Notification assignmentNotice(Recipient reviewer, ReviewersAssignedEvent event) {
+        String question = event.directQuestion() != null && !event.directQuestion().isBlank()
+                ? event.directQuestion() : event.questionId();
+
+        StringBuilder body = new StringBuilder();
+        body.append("Hola ").append(reviewer.fullName()).append(",\n\n");
+        body.append("El administrador");
+        if (event.assignedBy() != null && !event.assignedBy().isBlank()) {
+            body.append(" (").append(event.assignedBy()).append(')');
+        }
+        body.append(" le asigno una pregunta para revisar.\n\n");
+        body.append("Pregunta: ").append(question).append('\n');
+        body.append("Identificador: ").append(event.questionId()).append("\n\n");
+        body.append("Ingrese al Banco de Preguntas Saber PRO, en \"Preguntas asignadas\", para aprobarla o "
+                + "rechazarla con sus observaciones.\n\n");
+        body.append("Banco de Preguntas Saber PRO");
+
+        return new Notification(reviewer.email(), reviewer.fullName(),
+                "Nueva pregunta para revisar: " + abbreviate(question), body.toString());
     }
 
     private static Notification evaluationNotice(Recipient recipient, boolean isAuthor, QuestionEvaluatedEvent event) {

@@ -1,7 +1,7 @@
 package co.unicauca.saberpro.review.messaging;
 
 import co.unicauca.saberpro.common.events.QuestionSubmittedForReviewEvent;
-import co.unicauca.saberpro.common.web.PendingIssueException;
+import co.unicauca.saberpro.common.web.BusinessException;
 import co.unicauca.saberpro.review.application.ReviewApplicationService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,8 +25,8 @@ public class ReviewEventsConsumer {
     public void onQuestionSubmitted(QuestionSubmittedForReviewEvent event) {
         try {
             service.registerPendingQuestion(event);
-        } catch (PendingIssueException ex) {
-            // Se confirma el mensaje para no reintentarlo sin fin mientras el caso de uso no exista.
+        } catch (BusinessException ex) {
+            // Un evento mal formado se confirma igual para no reintentarlo sin fin.
             LOGGER.warn("{} Evento ignorado: {}", ex.getMessage(), event);
         }
     }
