@@ -1,7 +1,9 @@
 target/
 .idea/
 *.iml
-.vscode/
+.vscode/*
+# Configuracion compartida para correr todo el sistema con un clic (Run and Debug)
+!.vscode/launch.json
 .settings/
 .classpath
 .project
