@@ -11,11 +11,27 @@ import java.time.Instant;
  * avisar al autor y al administrador.
  *
  * Trae el texto de la pregunta (directQuestion) para que la notificacion
- * diga cual se evaluo sin consultar al question-service.
+ * diga cual se evaluo sin consultar al question-service, y la version
+ * evaluada (HU06) para que el question-service ignore un veredicto atrasado
+ * de una version anterior.
  */
-public record QuestionEvaluatedEvent(String questionId, String authorLogin, String directQuestion,
-                                     String reviewerLogin, EvaluationVerdict verdict, String observations,
-                                     Instant occurredAt) implements DomainEvent {
+public record QuestionEvaluatedEvent(String questionId, int questionVersion, String authorLogin,
+                                     String directQuestion, String reviewerLogin, EvaluationVerdict verdict,
+                                     String observations, Instant occurredAt) implements DomainEvent {
+
+    public QuestionEvaluatedEvent {
+        questionVersion = Math.max(questionVersion, 1);
+    }
+
+    /**
+     * Firma del segundo corte (sin version): equivale a la version 1. Se
+     * conserva para que los productores que aun no conocen la HU06 compilen.
+     */
+    public QuestionEvaluatedEvent(String questionId, String authorLogin, String directQuestion,
+                                  String reviewerLogin, EvaluationVerdict verdict, String observations,
+                                  Instant occurredAt) {
+        this(questionId, 1, authorLogin, directQuestion, reviewerLogin, verdict, observations, occurredAt);
+    }
 
     @Override
     public String routingKey() {
