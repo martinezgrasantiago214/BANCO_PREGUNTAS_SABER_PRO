@@ -1,6 +1,7 @@
 package co.unicauca.saberpro.review.testdoubles;
 
 import co.unicauca.saberpro.common.contract.Role;
+import co.unicauca.saberpro.review.application.port.out.ReviewerDirectory;
 import co.unicauca.saberpro.review.domain.model.QuestionSubmission;
 import co.unicauca.saberpro.review.domain.model.ReviewerCandidate;
 
@@ -36,5 +37,9 @@ public final class ReviewFixtures {
 
     public static List<ReviewerCandidate> candidates(String... logins) {
         return java.util.Arrays.stream(logins).map(ReviewFixtures::candidate).toList();
+    }
+
+    public static ReviewerDirectory directory() {
+        return ReviewFixtures::candidate;
     }
 }
