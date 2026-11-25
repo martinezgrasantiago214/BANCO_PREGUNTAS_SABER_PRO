@@ -1,0 +1,26 @@
+digraph G {
+  graph [rankdir=LR, fontname="DejaVu Sans", fontsize=12, pad=0.3, nodesep=0.3, ranksep=0.6, label="C4 nivel 3 - review-service con arquitectura limpia: DDD + Hexagonal (puertos y adaptadores)", labelloc=t, compound=true];
+  node [shape=box, style="rounded,filled", fontname="DejaVu Sans", fontsize=9, color="#333333"];
+  edge [fontname="DejaVu Sans", fontsize=8, color="#555555"];
+  subgraph cluster_in { label="infrastructure.adapter.in"; style="rounded,filled"; fillcolor="#DAE8FC"; fontname="DejaVu Sans";
+    web [label="ReviewController\nReviewDtos\nReviewApiExceptionHandler\n(REST, @PreAuthorize)", fillcolor="#FFFFFF"];
+    msg [label="ReviewEventsConsumer\n(@RabbitListener question.submitted)", fillcolor="#FFFFFF"]; }
+  subgraph cluster_app { label="Hexagono (nucleo): application + domain"; style="rounded,filled"; fillcolor="#D5E8D4"; fontname="DejaVu Sans";
+    pin [label="port.in\nRegisterSubmissionUseCase\nAssignReviewersUseCase\nEvaluateQuestionUseCase\nReviewQueries", fillcolor="#FFFFFF"];
+    svc [label="service (casos de uso)\nRegisterSubmissionService\nAssignReviewersService\nEvaluateQuestionService\nReviewQueryService", fillcolor="#FFFFFF"];
+    pout [label="port.out\nQuestionReviewRepository\nReviewerDirectory\nReviewEventPublisher", fillcolor="#FFFFFF"];
+    subgraph cluster_dom { label="domain (Java puro, sin Spring)"; style="rounded,filled"; fillcolor="#FFF2CC"; fontname="DejaVu Sans";
+      agg [label="model\nQuestionReview <<Aggregate Root>>\nReviewRound <<Entity>>\nEvaluation, ReviewerAssignment,\nReviewerSelection, QuestionSubmission,\nReviewerCandidate <<Value Objects>>\nReviewStatus", fillcolor="#FFFFFF"];
+      ev [label="event\nReviewersAssigned\nQuestionEvaluated\nReviewRoundReopened", fillcolor="#FFFFFF"];
+      ex [label="exception\nReviewRuleViolation (400)\nReviewerNotAllowed (403)\nReviewNotFound (404)\nReviewConflict / Concurrent (409)", fillcolor="#FFFFFF"]; } }
+  subgraph cluster_out { label="infrastructure.adapter.out"; style="rounded,filled"; fillcolor="#F8CECC"; fontname="DejaVu Sans";
+    db [label="SqliteQuestionReviewRepository\n(bloqueo optimista)", fillcolor="#FFFFFF"];
+    dir [label="UserServiceReviewerDirectory\n(RestClient + token de servicio)", fillcolor="#FFFFFF"];
+    pub [label="DomainEventBusReviewPublisher\n(evento de dominio -> evento de integracion)", fillcolor="#FFFFFF"]; }
+  cfg [label="infrastructure.config\nReviewServiceConfig\n(raiz de composicion)", shape=note, fillcolor="#EEEEEE"];
+  web -> pin; msg -> pin; pin -> svc [label="implementa", dir=back, style=dashed]; svc -> agg [label="delega reglas"]; agg -> ev [label="registra"]; svc -> pout [label="usa"];
+  db -> pout [label="implementa", style=dashed]; dir -> pout [style=dashed]; pub -> pout [style=dashed];
+  db -> sqlite [label="JDBC"]; dir -> users [label="HTTP"]; pub -> rabbit [label="AMQP"];
+  sqlite [label="SQLite (volumen)", shape=cylinder, fillcolor="#CCCCCC"]; users [label="user-service", fillcolor="#CCCCCC"]; rabbit [label="RabbitMQ", fillcolor="#CCCCCC"];
+  cfg -> svc [style=dotted, arrowhead=none];
+}
