@@ -1,4 +1,4 @@
-package co.unicauca.saberpro.review.messaging;
+package co.unicauca.saberpro.review.infrastructure.adapter.in.messaging;
 
 import co.unicauca.saberpro.common.events.EventTopics;
 import org.springframework.amqp.core.Binding;
