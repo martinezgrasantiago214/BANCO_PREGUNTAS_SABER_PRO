@@ -1,0 +1,21 @@
+{"title": "Secuencia HU06: historial de revisiones, version mejorada y nueva ronda",
+ "participants": ["Autor (Swing)", "question-service", "RabbitMQ", "review-service", "notification-service"],
+ "messages": [
+  {"note": "Ronda 1: la version 1 fue Rechazada por rev1 con observaciones (HU05)."},
+  {"from": "Autor (Swing)", "to": "review-service", "text": "GET /api/reviews/history/{id}"},
+  {"from": "review-service", "to": "Autor (Swing)", "text": "rondas, revisores, veredictos y observaciones", "reply": true},
+  {"from": "Autor (Swing)", "to": "question-service", "text": "POST /api/questions/{id}/revisions (contenido corregido)"},
+  {"from": "question-service", "to": "question-service", "text": "valida (Factory) + State: Rechazada -> Borrador, v2"},
+  {"from": "question-service", "to": "RabbitMQ", "text": "question.revised (v2)", "async": true},
+  {"from": "question-service", "to": "Autor (Swing)", "text": "201 version 2 en Borrador (v1 archivada)", "reply": true},
+  {"from": "Autor (Swing)", "to": "question-service", "text": "PATCH /submit-review (HU02)"},
+  {"from": "question-service", "to": "RabbitMQ", "text": "question.submitted (version 2)", "async": true},
+  {"from": "RabbitMQ", "to": "review-service", "text": "question.submitted v2", "async": true},
+  {"from": "review-service", "to": "review-service", "text": "QuestionReview.receive(): abre la ronda 2"},
+  {"from": "review-service", "to": "RabbitMQ", "text": "review.resubmitted (revisores y observaciones previas)", "async": true},
+  {"from": "RabbitMQ", "to": "notification-service", "text": "review.resubmitted", "async": true},
+  {"from": "notification-service", "to": "notification-service", "text": "correo a administradores, rev1 y autor"},
+  {"note": "El administrador asigna revisores a la ronda 2 (HU04) y un revisor la evalua (HU05)."},
+  {"from": "review-service", "to": "RabbitMQ", "text": "review.evaluated (version 2, Aprobada)", "async": true},
+  {"from": "RabbitMQ", "to": "question-service", "text": "aplica el veredicto solo si la version coincide", "async": true}
+ ]}

@@ -1,0 +1,17 @@
+digraph G {
+  graph [rankdir=TB, fontname="DejaVu Sans", fontsize=12, pad=0.3, label="Modelo de dominio del review-service (DDD): el estado vive en el agregado y cambia solo por metodos de negocio", labelloc=t];
+  node [shape=record, fontname="DejaVu Sans Mono", fontsize=9, style=filled, fillcolor="#FFF2CC", color="#806000"];
+  edge [fontname="DejaVu Sans", fontsize=8];
+  QR [label="{«Aggregate Root»\nQuestionReview|- questionId: String\l- authorLogin: String\l- rounds: List\<ReviewRound\>\l- version: long  (bloqueo optimista)\l- domainEvents: List\l|+ open(QuestionSubmission)$\l+ receive(QuestionSubmission): boolean\l+ assignReviewers(candidates, admin, now)\l+ evaluate(reviewer, verdict, obs, now)\l+ currentRound(), status(), rounds()\l+ isAwaitingDecision(), canBeConsultedBy()\l+ pullDomainEvents()\l}"];
+  RR [label="{«Entity»\nReviewRound|- number: int\l- submission: QuestionSubmission\l- assignments: List\<ReviewerAssignment\>\l- evaluation: Evaluation\l- status: ReviewStatus\l|~ assign(list)\l~ decide(evaluation)\l+ isAssigned(login), remainingReviewerSlots()\l}"];
+  RS [label="{«enum»\nReviewStatus|PENDIENTE_ASIGNACION\lEN_REVISION\lAPROBADA\lRECHAZADA\l|+ acceptsAssignments()\l+ acceptsEvaluation()\l+ isDecided(), allowsNewVersion()\l}", fillcolor="#E1D5E7"];
+  EV [label="{«Value Object»\nEvaluation|id, reviewerLogin, verdict,\lobservations, evaluatedAt\l|+ issue(...)$  valida contenido\l}", fillcolor="#D5E8D4"];
+  RA [label="{«Value Object»\nReviewerAssignment|reviewerLogin, assignedBy, assignedAt\l}", fillcolor="#D5E8D4"];
+  QS [label="{«Value Object»\nQuestionSubmission|questionId, questionVersion,\lauthorLogin, directQuestion, submittedAt\l}", fillcolor="#D5E8D4"];
+  SEL [label="{«Value Object»\nReviewerSelection|logins (1 a 3, distintos)\l}", fillcolor="#D5E8D4"];
+  RC [label="{«Value Object»\nReviewerCandidate|login, exists, role\l|+ isReviewer()\l}", fillcolor="#D5E8D4"];
+  DE [label="{«sealed interface»\nReviewDomainEvent|ReviewersAssigned\lQuestionEvaluated\lReviewRoundReopened\l}", fillcolor="#DAE8FC"];
+  QR -> RR [arrowhead=diamond, dir=back, label="1..* (una ronda por version)"];
+  RR -> RA [label="0..3"]; RR -> EV [label="0..1 decisiva"]; RR -> QS [label="1"]; RR -> RS;
+  QR -> SEL [style=dashed, label="valida"]; QR -> RC [style=dashed, label="usa"]; QR -> DE [style=dashed, label="registra"];
+}
